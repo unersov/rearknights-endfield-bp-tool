@@ -2,7 +2,7 @@
 
 一個專為《明日方舟：終末地》設計的網頁版基建規劃工具，協助玩家規劃工廠佈局與管理藍圖。
 
-**[立即體驗 (Live Demo)](https://zmd-bp-tool.pages.dev/)**
+**[體驗網址 (Live Demo)](https://zmd-bp-tool.pages.dev/)**
 
 ## 主要功能 (Key Features)
 
