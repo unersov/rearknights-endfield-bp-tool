@@ -9,6 +9,28 @@ export interface Material {
   id: string;
   name: string;
   icon: number; // Represents the image number
+  // Optional for backward compatibility. Will be gradually completed in materials config.
+  state?: 'solid' | 'liquid';
+  canDump?: boolean;
+  category?: 'ore' | 'plant' | 'industrial' | 'usable_item' | 'unknown';
+  isFinalProduct?: boolean;
+}
+
+export type RecipeId = string;
+
+export interface RecipeItemAmount {
+  materialId: string;
+  amount: number;
+}
+
+export interface Recipe {
+  id: RecipeId;
+  name: string;
+  machineId: string;
+  durationSeconds: number;
+  inputs: RecipeItemAmount[];
+  outputs: RecipeItemAmount[];
+  notes?: string;
 }
 
 export interface MachineConfig {
