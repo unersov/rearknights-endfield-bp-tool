@@ -244,3 +244,75 @@
   3) 规划结果到蓝图的转换策略。
 
 这三步完成后，再做最小 UI 入口，风险最低。
+
+---
+
+## 9) 数据层扩展计划：设施、材料、配方
+
+### 9.1 现有设施（Machine）数据结构与使用方式
+
+- 设施定义文件：`src/config/machines.ts`，核心数组为 `MACHINES`。
+- 设施类型定义：`src/types.ts` 中 `MachineConfig`。
+
+每个设施关键字段（当前项目）与用途：
+
+- `id`: 设施唯一标识。用于放置实例 `PlacedMachine.machineId` 关联配置，也用于配方绑定（后续）。
+- `width` / `height`: 占地尺寸（格子单位）。用于：
+  - 放置时边界判定和碰撞检测；
+  - 旋转后尺寸计算；
+  - 选区/移动时计算包围盒。
+- `inputs` / `outputs`: 端口配置数组（`PortConfig[]`），每个端口使用：
+  - `x`,`y`: 相对设施左上角的网格坐标；
+  - `side`: `top | right | bottom | left`，表示端口朝向。
+  这些字段用于连线起止点识别、寻路入口偏移（从端口外一格出发/到达）和端口渲染。
+- `category`: 工具栏分类（core/logistics/storage/production/processing/power），直接用于 UI 分组过滤。
+- `power`: 当前用于“是否需供电”判断。
+- `supplyRange`: 供电半径，仅供电设施使用；用于电力覆盖判定。
+- `allowedMaterials`: 当前主要用于“机台上选择/显示某物料图标”的 UI 选择列表，不是生产配方。
+
+### 9.2 端口坐标与方向表达
+
+- `inputs/outputs` 的坐标是 **相对于机器左上角** 的离散格子坐标。
+- `side` 描述端口“接线朝向”，用于连线时从端口向外偏移一格并进入寻路。
+- 旋转后端口通过工具函数换算（坐标+side 一起旋转），所以原始配置只需维护“0° 朝向”的端口定义。
+
+### 9.3 UI / 编辑器是否直接依赖这些字段
+
+是，依赖非常直接：
+
+- `Grid` / `Machine` 渲染尺寸、端口、碰撞预览依赖 `width/height/inputs/outputs/category`。
+- `gameStore` 的放置、连线、路径有效性、选区包围盒依赖 `machineId -> MachineConfig` 查找与端口数据。
+- 材料选择弹窗依赖 `allowedMaterials`。
+
+结论：设施字段是当前编辑器核心协议，扩展时应新增字段而不是改名或改语义。
+
+### 9.4 现有物品（Material）数据结构与使用方式
+
+- 物品定义文件：`src/config/materials.ts`，核心对象为 `MATERIALS: Record<string, Material>`。
+- 物品类型定义：`src/types.ts` 中 `Material`。
+- 旧字段为：`id`、`name`、`icon`。
+
+当前用途判断：
+
+- 主要用于 UI（机台可选物料图标）与 `allowedMaterials` 组合。
+- 目前并没有“基于 Material 的配方输入/输出计算”逻辑。
+
+### 9.5 `allowedMaterials` 与“真实配方”的区别
+
+- `allowedMaterials`：表示某机器在 UI 中“允许选择显示哪些物料图标”，本质是展示/标注能力。
+- `Recipe.inputs/outputs`（后续新增）：表示真实生产转换关系（消耗/产出数量 + 耗时 + 机台类型）。
+
+两者不应混用：
+
+- 不能用 `allowedMaterials` 反推生产链；
+- 自动规划器应以 `RECIPES` 为真值来源，`allowedMaterials` 仅作 UI 辅助。
+
+### 9.6 本次扩展策略（兼容优先）
+
+本次对 `Material` 采用“**兼容性可选字段**”方案（方案 B）：
+
+- 新增 `state` / `canDump` / `category` / `isFinalProduct`，先设为可选。
+- 原因：当前 `materials.ts` 条目很多，若一次性强制补齐会引入大规模数据改动，难以在本阶段保证分类准确性。
+- 配合 `validateGameData()` 给出 warning，后续可分批补齐并逐步收紧为必填。
+
+这是一种最小侵入式过渡方案，不影响现有编辑器运行。
