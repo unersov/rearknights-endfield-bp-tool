@@ -1,5 +1,5 @@
 名称,英文名称,物品分类,仓库分类,稀有度,是否液体/可否排放,发电量,
-源矿,Originium Ore,自然资源,矿物,灰色,,50/5s,源头产物
+源矿,Originium Ore,自然资源,矿物,灰色,,50/5s,源头产物/发电
 紫晶矿,Amethyst Ore,自然资源,矿物,灰色,,,源头产物
 蓝铁矿,Ferrium Ore,自然资源,矿物,灰色,,,源头产物
 赤铜矿,Cuprium Ore,自然资源,矿物,灰色,,,源头产物
@@ -74,11 +74,11 @@
 息壞装备原件,Xiranite Component,工业产物,产物,紫色,,,终端产物
 赤铜装备原件,Cuprium Component,工业产物,产物,紫色,,,终端产物
 赫铜装备原件,Hetonite Component,工业产物,产物,紫色,,,终端产物
-低容谷地电池,LC Valley Battery,工业产物,产物,蓝色,,220/40s,终端产物
-中容谷地电池,SC Valley Battery,工业产物,产物,蓝色,,420/40s,终端产物
-高容谷地电池,HC Valley Battery,工业产物,产物,紫色,,1100/40s,终端产物
-低容武陵电池,HC Valley Battery,工业产物,产物,紫色,,1600/40s,终端产物
-中容武陵电池,HC Valley Battery,工业产物,产物,紫色,,3200/40s,终端产物
+低容谷地电池,LC Valley Battery,工业产物,产物,蓝色,,220/40s,终端产物/发电
+中容谷地电池,SC Valley Battery,工业产物,产物,蓝色,,420/40s,终端产物/发电
+高容谷地电池,HC Valley Battery,工业产物,产物,紫色,,1100/40s,终端产物/发电
+低容武陵电池,HC Valley Battery,工业产物,产物,紫色,,1600/40s,终端产物/发电
+中容武陵电池,HC Valley Battery,工业产物,产物,紫色,,3200/40s,终端产物/发电
 工业爆炸物,Industrial Explosive,可用道具,可用道具,蓝色,,,终端产物
 荞花粉末,Buckflower Powder,可用道具,可用道具,绿色,,,
 柑实粉末,Buckflower Powder,可用道具,可用道具,绿色,,,
