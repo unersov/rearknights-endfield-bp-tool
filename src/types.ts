@@ -9,21 +9,29 @@ export type Rarity = 'gray' | 'green' | 'blue' | 'purple' | 'gold' | 'orange' | 
 export interface Material {
   id: string;
   name: string;
-  icon: number;
-  nameZh?: string;
-  nameEn?: string;
-  itemCategory?: ItemCategory;
-  storageCategory?: StorageCategory;
-  rarity?: Rarity;
+  icon: number; // Represents the image number
+  // Optional for backward compatibility. Will be gradually completed in materials config.
   state?: 'solid' | 'liquid';
   canDump?: boolean;
-  isSourceProduct?: boolean;
-  isRecyclable?: boolean;
-  isFinalProduct?: boolean;
-  isBottle?: boolean;
-  powerGenerationRaw?: string;
-  notes?: string;
   category?: 'ore' | 'plant' | 'industrial' | 'usable_item' | 'unknown';
+  isFinalProduct?: boolean;
+}
+
+export type RecipeId = string;
+
+export interface RecipeItemAmount {
+  materialId: string;
+  amount: number;
+}
+
+export interface Recipe {
+  id: RecipeId;
+  name: string;
+  machineId: string;
+  durationSeconds: number;
+  inputs: RecipeItemAmount[];
+  outputs: RecipeItemAmount[];
+  notes?: string;
 }
 
 export type RecipeId = string;
