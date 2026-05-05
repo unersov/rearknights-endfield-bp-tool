@@ -61,12 +61,12 @@
 高晶质瓶,Cryston Bottle,工业产物,产物,蓝色,,,瓶子
 钢质瓶,Steel Bottle,工业产物,产物,蓝色,,,瓶子
 赤铜瓶,Cuprium Bottle,工业产物,产物,蓝色,,,瓶子
-赫铜瓶,Cuprium Bottle,工业产物,产物,蓝色,,,瓶子
+赫铜瓶,Hetonite Bottle,工业产物,产物,蓝色,,,瓶子
 紫晶零件,Amethyst Part,工业产物,产物,绿色,,,
 铁制零件,Ferrium Part,工业产物,产物,绿色,,,
 高晶零件,Cryston Part,工业产物,产物,蓝色,,,
-钢制零件,Cryston Part,工业产物,产物,蓝色,,,
-赤铜零件,Cryston Part,工业产物,产物,蓝色,,,
+钢制零件,Steel Part,工业产物,产物,蓝色,,,
+赤铜零件,Cuprium Part,工业产物,产物,蓝色,,,
 赫铜零件,Hetonite Part,工业产物,产物,紫色,,,
 紫晶装备原件,Amethyst Component,工业产物,产物,绿色,,,终端产物
 蓝铁装备原件,Ferrium Component,工业产物,产物,绿色,,,终端产物
@@ -81,7 +81,7 @@
 中容武陵电池,HC Valley Battery,工业产物,产物,紫色,,3200/40s,终端产物/发电
 工业爆炸物,Industrial Explosive,可用道具,可用道具,蓝色,,,终端产物
 荞花粉末,Buckflower Powder,可用道具,可用道具,绿色,,,
-柑实粉末,Buckflower Powder,可用道具,可用道具,绿色,,,
+柑实粉末,Citrome Powder,可用道具,可用道具,绿色,,,
 锦草粉末,Jincao Powder,可用道具,可用道具,绿色,,,
 芽针粉末,Yazhen Powder,可用道具,可用道具,绿色,,,
 荞愈胶囊,Buck Capsule [C],可用道具,可用道具,蓝色,,,终端产物
