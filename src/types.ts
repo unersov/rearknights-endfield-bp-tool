@@ -5,32 +5,25 @@ export interface Point { x: number; y: number; }
 export type ItemCategory = 'natural_resource' | 'gatherable' | 'rare_material' | 'aic_product' | 'usable_item' | 'functional_item' | 'unknown';
 export type StorageCategory = 'minerals' | 'plants' | 'products' | 'gatherables' | 'progression' | 'usables' | 'production' | 'none' | 'unknown';
 export type Rarity = 'gray' | 'green' | 'blue' | 'purple' | 'gold' | 'orange' | 'unknown';
+export type MaterialState = 'solid' | 'liquid';
 
 export interface Material {
   id: string;
   name: string;
-  icon: number; // Represents the image number
-  // Optional for backward compatibility. Will be gradually completed in materials config.
-  state?: 'solid' | 'liquid';
+  icon: number;
+  nameZh?: string;
+  nameEn?: string;
+  itemCategory?: ItemCategory;
+  storageCategory?: StorageCategory;
+  rarity?: Rarity;
+  state?: MaterialState;
   canDump?: boolean;
   category?: 'ore' | 'plant' | 'industrial' | 'usable_item' | 'unknown';
+  isSourceProduct?: boolean;
+  isRecyclable?: boolean;
   isFinalProduct?: boolean;
-}
-
-export type RecipeId = string;
-
-export interface RecipeItemAmount {
-  materialId: string;
-  amount: number;
-}
-
-export interface Recipe {
-  id: RecipeId;
-  name: string;
-  machineId: string;
-  durationSeconds: number;
-  inputs: RecipeItemAmount[];
-  outputs: RecipeItemAmount[];
+  isBottle?: boolean;
+  powerGenerationRaw?: string;
   notes?: string;
 }
 

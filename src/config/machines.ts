@@ -34,7 +34,7 @@ export const MACHINES: MachineConfig[] = [
         ],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'core',
-        allowedMaterials: []
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'logistics-bridge',
@@ -46,7 +46,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'logistics',
-        allowedMaterials: []
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'splitter',
@@ -58,7 +58,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [{ x: 0, y: 0, side: 'right' }, { x: 0, y: 0, side: 'bottom' }, { x: 0, y: 0, side: 'top' }],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'logistics',
-        allowedMaterials: []
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'merger',
@@ -70,7 +70,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [{ x: 0, y: 0, side: 'right' }],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'logistics',
-        allowedMaterials: []
+        allowedMaterials: Object.values(MATERIALS)
     }, {
         id: 'item-input-port',
         name: '物品准入口',
@@ -105,7 +105,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'storage',
-        allowedMaterials: []
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'warehouse-pickup-port',
@@ -129,7 +129,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'storage',
-        allowedMaterials: []
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'warehouse-storage-pickup-line-source-pile',
@@ -141,7 +141,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'storage',
-        allowedMaterials: []
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'refinery',
@@ -153,17 +153,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [{ x: 2, y: 0, side: 'right' }, { x: 2, y: 1, side: 'right' }, { x: 2, y: 2, side: 'right' }],
         color: 'rgba(170, 221, 255, 0.3)', // Light Blue
         category: 'production',
-        allowedMaterials: [
-            MATERIALS.BLUE_IRON_BLOCK,
-            MATERIALS.PURPLE_CRYSTAL_FIBER,
-            MATERIALS.CRYSTAL_SHELL,
-            MATERIALS.COMPACT_CRYSTAL,
-            MATERIALS.STEEL_INGOT,
-            MATERIALS.HIGH_CRYSTAL_FIBER,
-            MATERIALS.STABLE_CARBON_BLOCK,
-            MATERIALS.COMPACT_CRYSTAL_POWDER,
-            MATERIALS.CARBON_BLOCK
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'crusher',
@@ -175,19 +165,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [{ x: 2, y: 0, side: 'right' }, { x: 2, y: 1, side: 'right' }, { x: 2, y: 2, side: 'right' }],
         color: 'rgba(255, 170, 136, 0.3)', // Light Orange
         category: 'production',
-        allowedMaterials: [
-            MATERIALS.BLUE_IRON_POWDER,
-            MATERIALS.PURPLE_CRYSTAL_POWDER,
-            MATERIALS.SOURCE_POWDER,
-            MATERIALS.CARBON_POWDER,
-            MATERIALS.CRYSTAL_SHELL_POWDER,
-            MATERIALS.QIAO_FLOWER_POWDER,
-            MATERIALS.GAN_SHI_POWDER,
-            MATERIALS.SAND_LEAF_POWDER,
-            MATERIALS.KETONIZED_SHRUB_POWDER,
-            MATERIALS.JIN_CAO_POWDER,
-            MATERIALS.YA_ZHEN_POWDER
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'assembler',
@@ -199,12 +177,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [{ x: 2, y: 0, side: 'right' }, { x: 2, y: 1, side: 'right' }, { x: 2, y: 2, side: 'right' }],
         color: 'rgba(204, 136, 255, 0.3)', // Purple
         category: 'production',
-        allowedMaterials: [
-            MATERIALS.IRON_PARTS,
-            MATERIALS.PURPLE_CRYSTAL_PARTS,
-            MATERIALS.STEEL_PARTS,
-            MATERIALS.HIGH_CRYSTAL_PARTS
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'molder',
@@ -216,12 +189,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [{ x: 2, y: 0, side: 'right' }, { x: 2, y: 1, side: 'right' }, { x: 2, y: 2, side: 'right' }],
         color: 'rgba(255, 136, 136, 0.3)', // Red
         category: 'production',
-        allowedMaterials: [
-            MATERIALS.BLUE_IRON_BOTTLE,
-            MATERIALS.PURPLE_CRYSTAL_BOTTLE,
-            MATERIALS.STEEL_BOTTLE,
-            MATERIALS.HIGH_CRYSTAL_BOTTLE
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'seedHarvester',
@@ -233,18 +201,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [{ x: 4, y: 0, side: 'right' }, { x: 4, y: 1, side: 'right' }, { x: 4, y: 2, side: 'right' }, { x: 4, y: 3, side: 'right' }, { x: 4, y: 4, side: 'right' }],
         color: 'rgba(209, 230, 209, 0.3)', // Green
         category: 'production',
-        allowedMaterials: [
-            MATERIALS.QIAO_FLOWER_SEED,
-            MATERIALS.GAN_SHI_SEED,
-            MATERIALS.SAND_LEAF_SEED,
-            MATERIALS.KETONIZED_SHRUB_SEED,
-            MATERIALS.JIN_CAO_SEED,
-            MATERIALS.YA_ZHEN_SEED,
-            MATERIALS.HUI_LU_MAI_SEED,
-            MATERIALS.KU_YE_JIAO_SEED,
-            MATERIALS.QIONG_YE_SHEN_SEED,
-            MATERIALS.JIN_SHI_DAO_SEED
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'planter',
@@ -256,14 +213,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [{ x: 4, y: 0, side: 'right' }, { x: 4, y: 1, side: 'right' }, { x: 4, y: 2, side: 'right' }, { x: 4, y: 3, side: 'right' }, { x: 4, y: 4, side: 'right' }],
         color: 'rgba(255, 136, 136, 0.3)', // Red
         category: 'production',
-        allowedMaterials: [
-            MATERIALS.QIAO_FLOWER,
-            MATERIALS.GAN_SHI,
-            MATERIALS.SAND_LEAF,
-            MATERIALS.KETONIZED_SHRUB,
-            MATERIALS.JIN_CAO,
-            MATERIALS.YA_ZHEN
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'component-assembler',
@@ -283,12 +233,7 @@ export const MACHINES: MachineConfig[] = [
         ],
         color: 'rgba(255, 136, 204, 0.3)', // Pinkish
         category: 'processing',
-        allowedMaterials: [
-            MATERIALS.PURPLE_CRYSTAL_EQUIPMENT_COMPONENT,
-            MATERIALS.BLUE_IRON_EQUIPMENT_COMPONENT,
-            MATERIALS.HIGH_CRYSTAL_EQUIPMENT_COMPONENT,
-            MATERIALS.XI_RANG_EQUIPMENT_COMPONENT
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'filler',
@@ -308,12 +253,7 @@ export const MACHINES: MachineConfig[] = [
         ],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'processing',
-        allowedMaterials: [
-            MATERIALS.WATER_BOTTLE,
-            MATERIALS.JIN_CAO_SOLUTION,
-            MATERIALS.YA_ZHEN_SOLUTION,
-            MATERIALS.LIQUID_XI_RANG
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'sealer',
@@ -333,15 +273,7 @@ export const MACHINES: MachineConfig[] = [
         ],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'processing',
-        allowedMaterials: [
-            MATERIALS.INDUSTRIAL_EXPLOSIVE,
-            MATERIALS.LOW_CAPACITY_FIELD_BATTERY,
-            MATERIALS.MEDIUM_CAPACITY_FIELD_BATTERY,
-            MATERIALS.HIGH_CAPACITY_FIELD_BATTERY,
-            MATERIALS.YA_ZHEN_INJECTION,
-            MATERIALS.JIN_CAO_BEVERAGE,
-            MATERIALS.LOW_CAPACITY_WULING_BATTERY
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'grinder',
@@ -361,15 +293,7 @@ export const MACHINES: MachineConfig[] = [
         ],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'processing',
-        allowedMaterials: [
-            MATERIALS.COMPACT_BLUE_IRON_POWDER,
-            MATERIALS.HIGH_CRYSTAL_POWDER,
-            MATERIALS.COMPACT_SOURCE_POWDER,
-            MATERIALS.COMPACT_CARBON_POWDER,
-            MATERIALS.COMPACT_CRYSTAL_POWDER,
-            MATERIALS.FINE_GROUND_QIAO_FLOWER_POWDER,
-            MATERIALS.FINE_GROUND_GAN_SHI_POWDER
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'reactor',
@@ -387,11 +311,7 @@ export const MACHINES: MachineConfig[] = [
         ],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'processing',
-        allowedMaterials: [
-            MATERIALS.LIQUID_XI_RANG,
-            MATERIALS.JIN_CAO_SOLUTION,
-            MATERIALS.YA_ZHEN_SOLUTION
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'tian-you-hong-furnace',
@@ -415,9 +335,7 @@ export const MACHINES: MachineConfig[] = [
         ],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'processing',
-        allowedMaterials: [
-            MATERIALS.XI_RANG
-        ]
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'supply-pole',
@@ -430,7 +348,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [],
         color: 'rgba(255, 230, 128, 0.3)', // Pale Yellow
         category: 'power',
-        allowedMaterials: []
+        allowedMaterials: Object.values(MATERIALS)
     },
     {
         id: 'thermal-pool',
@@ -445,7 +363,7 @@ export const MACHINES: MachineConfig[] = [
         outputs: [],
         color: 'rgba(255, 255, 255, 0.3)',
         category: 'power',
-        allowedMaterials: []
+        allowedMaterials: Object.values(MATERIALS)
     }
 ];
 
