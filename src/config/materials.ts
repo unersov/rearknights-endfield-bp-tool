@@ -1,384 +1,99 @@
 import type { Material } from '../types';
 
 export const MATERIALS: Record<string, Material> = {
-    BLUE_IRON_ORE: {
-        id: 'blue-iron-ore',
-        name: '藍鐵礦',
-        icon: 52
-    },
-    PURPLE_CRYSTAL_ORE: {
-        id: 'purple-crystal-ore',
-        name: '紫晶礦',
-        icon: 120
-    },
-    SOURCE_ORE: {
-        id: 'source-ore',
-        name: '源礦',
-        icon: 61
-    },
-    COMPACT_CRYSTAL_POWDER: {
-        id: 'compact-crystal-powder',
-        name: '緻密晶體粉末',
-        icon: 5
-    },
-    COMPACT_BLUE_IRON_POWDER: {
-        id: 'compact-blue-iron-powder',
-        name: '緻密藍鐵粉末',
-        icon: 50
-    },
-    HIGH_CRYSTAL_POWDER: {
-        id: 'high-crystal-powder',
-        name: '高晶粉末',
-        icon: 117
-    },
-    COMPACT_CARBON_POWDER: {
-        id: 'compact-carbon-powder',
-        name: '緻密碳粉末',
-        icon: 1
-    },
-    COMPACT_SOURCE_POWDER: {
-        id: 'compact-source-powder',
-        name: '緻密源石粉末',
-        icon: 60
-    },
-    QIAO_FLOWER: {
-        id: 'qiao-flower',
-        name: '蕎花',
-        icon: 77
-    },
-    SAND_LEAF: {
-        id: 'sand-leaf',
-        name: '砂葉',
-        icon: 79
-    },
-    BLUE_IRON_BLOCK: {
-        id: 'blue-iron-block',
-        name: '藍鐵塊',
-        icon: 51
-    },
-    PURPLE_CRYSTAL_FIBER: {
-        id: 'purple-crystal-fiber',
-        name: '紫晶纖維',
-        icon: 118
-    },
-    CRYSTAL_SHELL: {
-        id: 'crystal-shell',
-        name: '晶體外殼',
-        icon: 7
-    },
-    COMPACT_CRYSTAL: {
-        id: 'compact-crystal',
-        name: '密製晶體',
-        icon: 4
-    },
-    STEEL_INGOT: {
-        id: 'steel-ingot',
-        name: '鋼塊',
-        icon: 46
-    },
-    HIGH_CRYSTAL_FIBER: {
-        id: 'high-crystal-fiber',
-        name: '高晶纖維',
-        icon: 116
-    },
-    STABLE_CARBON_BLOCK: {
-        id: 'stable-carbon-block',
-        name: '穩定碳塊',
-        icon: 0
-    },
-    CARBON_BLOCK: {
-        id: 'carbon-block',
-        name: '碳塊',
-        icon: 2
-    },
-    GAN_SHI: {
-        id: 'gan-shi',
-        name: '柑實',
-        icon: 78
-    },
-    KETONIZED_SHRUB: {
-        id: 'ketonized-shrub',
-        name: '酮化灌木',
-        icon: 63
-    },
-    JIN_CAO: {
-        id: 'jin-cao',
-        name: '錦草',
-        icon: 71
-    },
-    YA_ZHEN: {
-        id: 'ya-zhen',
-        name: '芽針',
-        icon: 72
-    },
-    BLUE_IRON_POWDER: {
-        id: 'blue-iron-powder',
-        name: '藍鐵粉末',
-        icon: 53
-    },
-    PURPLE_CRYSTAL_POWDER: {
-        id: 'purple-crystal-powder',
-        name: '紫晶粉末',
-        icon: 119
-    },
-    SOURCE_POWDER: {
-        id: 'source-powder',
-        name: '源石粉末',
-        icon: 62
-    },
-    CARBON_POWDER: {
-        id: 'carbon-powder',
-        name: '碳粉末',
-        icon: 3
-    },
-    CRYSTAL_SHELL_POWDER: {
-        id: 'crystal-shell-powder',
-        name: '晶體外殼粉末',
-        icon: 6
-    },
-    QIAO_FLOWER_POWDER: {
-        id: 'qiao-flower-powder',
-        name: '蕎花粉末',
-        icon: 125
-    },
-    GAN_SHI_POWDER: {
-        id: 'gan-shi-powder',
-        name: '柑實粉末',
-        icon: 126
-    },
-    SAND_LEAF_POWDER: {
-        id: 'sand-leaf-powder',
-        name: '砂葉粉末',
-        icon: 82
-    },
-    KETONIZED_SHRUB_POWDER: {
-        id: 'ketonized-shrub-powder',
-        name: '酮化灌木粉末',
-        icon: 64
-    },
-    JIN_CAO_POWDER: {
-        id: 'jin-cao-powder',
-        name: '錦草粉末',
-        icon: 127
-    },
-    YA_ZHEN_POWDER: {
-        id: 'ya-zhen-powder',
-        name: '芽針粉末',
-        icon: 128
-    },
-    IRON_PARTS: {
-        id: 'iron-parts',
-        name: '鐵製零件',
-        icon: 45
-    },
-    PURPLE_CRYSTAL_PARTS: {
-        id: 'purple-crystal-parts',
-        name: '紫晶零件',
-        icon: 40
-    },
-    STEEL_PARTS: {
-        id: 'steel-parts',
-        name: '鋼製零件',
-        icon: 49
-    },
-    HIGH_CRYSTAL_PARTS: {
-        id: 'high-crystal-parts',
-        name: '高晶零件',
-        icon: 42
-    },
-    BLUE_IRON_BOTTLE: {
-        id: 'blue-iron-bottle',
-        name: '藍鐵瓶',
-        icon: 43
-    },
-    PURPLE_CRYSTAL_BOTTLE: {
-        id: 'purple-crystal-bottle',
-        name: '紫晶質瓶',
-        icon: 38
-    },
-    STEEL_BOTTLE: {
-        id: 'steel-bottle',
-        name: '鋼質瓶',
-        icon: 47
-    },
-    HIGH_CRYSTAL_BOTTLE: {
-        id: 'high-crystal-bottle',
-        name: '高晶質瓶',
-        icon: 41
-    },
-    QIAO_FLOWER_SEED: {
-        id: 'qiao-flower-seed',
-        name: '蕎花種子',
-        icon: 83
-    },
-    GAN_SHI_SEED: {
-        id: 'gan-shi-seed',
-        name: '柑實種子',
-        icon: 84
-    },
-    SAND_LEAF_SEED: {
-        id: 'sand-leaf-seed',
-        name: '砂葉種子',
-        icon: 85
-    },
-    KETONIZED_SHRUB_SEED: {
-        id: 'ketonized-shrub-seed',
-        name: '酮化樹種',
-        icon: 65
-    },
-    JIN_CAO_SEED: {
-        id: 'jin-cao-seed',
-        name: '錦草種子',
-        icon: 73
-    },
-    YA_ZHEN_SEED: {
-        id: 'ya-zhen-seed',
-        name: '芽針種子',
-        icon: 74
-    },
-    HUI_LU_MAI: {
-        id: 'hui-lu-mai',
-        name: '灰蘆麥',
-        icon: 93
-    },
-    HUI_LU_MAI_SEED: {
-        id: 'hui-lu-mai-seed',
-        name: '灰蘆麥種子',
-        icon: 97
-    },
-    KU_YE_JIAO: {
-        id: 'ku-ye-jiao',
-        name: '苦葉椒',
-        icon: 94
-    },
-    KU_YE_JIAO_SEED: {
-        id: 'ku-ye-jiao-seed',
-        name: '苦葉椒種子',
-        icon: 98
-    },
-    QIONG_YE_SHEN: {
-        id: 'qiong-ye-shen',
-        name: '瓊葉蔘',
-        icon: 95
-    },
-    QIONG_YE_SHEN_SEED: {
-        id: 'qiong-ye-shen-seed',
-        name: '瓊葉蔘種子',
-        icon: 99
-    },
-    JIN_SHI_DAO: {
-        id: 'jin-shi-dao',
-        name: '金石稻',
-        icon: 96
-    },
-    JIN_SHI_DAO_SEED: {
-        id: 'jin-shi-dao-seed',
-        name: '金石稻種子',
-        icon: 100
-    },
-    XI_RANG: {
-        id: 'xi-rang',
-        name: '息壤',
-        icon: 124
-    },
-    PURPLE_CRYSTAL_EQUIPMENT_COMPONENT: {
-        id: 'purple-crystal-equipment-component',
-        name: '紫晶裝備原件',
-        icon: 33
-    },
-    BLUE_IRON_EQUIPMENT_COMPONENT: {
-        id: 'blue-iron-equipment-component',
-        name: '藍鐵裝備原件',
-        icon: 34
-    },
-    HIGH_CRYSTAL_EQUIPMENT_COMPONENT: {
-        id: 'high-crystal-equipment-component',
-        name: '高晶裝備原件',
-        icon: 35
-    },
-    XI_RANG_EQUIPMENT_COMPONENT: {
-        id: 'xi-rang-equipment-component',
-        name: '息壤裝備原件',
-        icon: 36
-    },
-    WATER_BOTTLE: {
-        id: 'water-bottle',
-        name: '清水(灌裝)',
-        icon: 44
-    },
-    JIN_CAO_SOLUTION_BOTTLE: {
-        id: 'jin-cao-solution-bottle',
-        name: '錦草溶液(灌裝)',
-        icon: 44
-    },
-    YA_ZHEN_SOLUTION_BOTTLE: {
-        id: 'ya-zhen-solution-bottle',
-        name: '芽針溶液(灌裝)',
-        icon: 44
-    },
-    LIQUID_XI_RANG_BOTTLE: {
-        id: 'liquid-xi-rang-bottle',
-        name: '液化息壤(灌裝)',
-        icon: 44
-    },
-    INDUSTRIAL_EXPLOSIVE: {
-        id: 'industrial-explosive',
-        name: '工業爆炸物',
-        icon: 131
-    },
-    LOW_CAPACITY_FIELD_BATTERY: {
-        id: 'low-capacity-field-battery',
-        name: '低容量谷地電池',
-        icon: 112
-    },
-    MEDIUM_CAPACITY_FIELD_BATTERY: {
-        id: 'medium-capacity-field-battery',
-        name: '中容量谷地電池',
-        icon: 113
-    },
-    HIGH_CAPACITY_FIELD_BATTERY: {
-        id: 'high-capacity-field-battery',
-        name: '高容量谷地電池',
-        icon: 114
-    },
-    YA_ZHEN_INJECTION: {
-        id: 'ya-zhen-injection',
-        name: '芽針針劑',
-        icon: 130
-    },
-    JIN_CAO_BEVERAGE: {
-        id: 'jin-cao-beverage',
-        name: '錦草飲料',
-        icon: 129
-    },
-    LOW_CAPACITY_WULING_BATTERY: {
-        id: 'low-capacity-wuling-battery',
-        name: '低容量武陵電池',
-        icon: 115
-    },
-    FINE_GROUND_QIAO_FLOWER_POWDER: {
-        id: 'fine-ground-qiao-flower-powder',
-        name: '細磨蕎花粉末',
-        icon: 80
-    },
-    FINE_GROUND_GAN_SHI_POWDER: {
-        id: 'fine-ground-gan-shi-powder',
-        name: '細磨柑實粉末',
-        icon: 81
-    },
-    LIQUID_XI_RANG: {
-        id: 'liquid-xi-rang',
-        name: '液化息壤',
-        icon: 57
-    },
-    JIN_CAO_SOLUTION: {
-        id: 'jin-cao-solution',
-        name: '錦草溶液',
-        icon: 54
-    },
-    YA_ZHEN_SOLUTION: {
-        id: 'ya-zhen-solution',
-        name: '芽針溶液',
-        icon: 55
-    }
+  ORIGINIUM_ORE: {"id": "originium_ore", "name": "源矿", "nameZh": "源矿", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "minerals", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": true, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Originium Ore", "powerGenerationRaw": "50/5s"},
+  AMETHYST_ORE: {"id": "amethyst_ore", "name": "紫晶矿", "nameZh": "紫晶矿", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "minerals", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": true, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Amethyst Ore"},
+  FERRIUM_ORE: {"id": "ferrium_ore", "name": "蓝铁矿", "nameZh": "蓝铁矿", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "minerals", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": true, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Ferrium Ore"},
+  CUPRIUM_ORE: {"id": "cuprium_ore", "name": "赤铜矿", "nameZh": "赤铜矿", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "minerals", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": true, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Cuprium Ore"},
+  BUCKFLOWER: {"id": "buckflower", "name": "荞花", "nameZh": "荞花", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Buckflower"},
+  BUCKFLOWER_SEED: {"id": "buckflower_seed", "name": "荞花种子", "nameZh": "荞花种子", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Buckflower Seed"},
+  CITROME: {"id": "citrome", "name": "柑实", "nameZh": "柑实", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Citrome"},
+  CITROME_SEED: {"id": "citrome_seed", "name": "柑实种子", "nameZh": "柑实种子", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Citrome Seed"},
+  SANDLEAF: {"id": "sandleaf", "name": "砂叶", "nameZh": "砂叶", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Sandleaf"},
+  SANDLEAF_SEED: {"id": "sandleaf_seed", "name": "砂叶种子", "nameZh": "砂叶种子", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Sandleaf Seed"},
+  AKETINE: {"id": "aketine", "name": "酮化灌木", "nameZh": "酮化灌木", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Aketine"},
+  AKETINE_SEED: {"id": "aketine_seed", "name": "酮化树种", "nameZh": "酮化树种", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Aketine Seed"},
+  JINCAO: {"id": "jincao", "name": "锦草", "nameZh": "锦草", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Jincao"},
+  JINCAO_SEED: {"id": "jincao_seed", "name": "锦草种子", "nameZh": "锦草种子", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Jincao Seed"},
+  YAZHEN: {"id": "yazhen", "name": "芽针", "nameZh": "芽针", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Yazhen"},
+  YAZHEN_SEED: {"id": "yazhen_seed", "name": "芽针种子", "nameZh": "芽针种子", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "plants", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": true, "isFinalProduct": false, "isBottle": false, "nameEn": "Yazhen Seed"},
+  CLEAN_WATER: {"id": "clean_water", "name": "清水", "nameZh": "清水", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "none", "rarity": "gray", "state": "liquid", "canDump": true, "isSourceProduct": true, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Clean Water"},
+  BURDO_MUCK: {"id": "burdo_muck", "name": "驮兽粪便", "nameZh": "驮兽粪便", "icon": 0, "itemCategory": "gatherable", "storageCategory": "gatherables", "rarity": "gray", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Burdo-Muck"},
+  PRECIPITATION_ACID: {"id": "precipitation_acid", "name": "沉积酸", "nameZh": "沉积酸", "icon": 0, "itemCategory": "natural_resource", "storageCategory": "none", "rarity": "gray", "state": "liquid", "canDump": true, "isSourceProduct": true, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Precipitation Acid"},
+  JINCAO_SOLUTION: {"id": "jincao_solution", "name": "锦草溶液", "nameZh": "锦草溶液", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "liquid", "canDump": true, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Jincao Solution"},
+  YAZHEN_SOLUTION: {"id": "yazhen_solution", "name": "芽针溶液", "nameZh": "芽针溶液", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "liquid", "canDump": true, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Yazhen Solution"},
+  LIQUID_XIRANITE: {"id": "liquid_xiranite", "name": "液化息壞", "nameZh": "液化息壞", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "liquid", "canDump": true, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Liquid Xiranite"},
+  LIQUID_HEAVY_XIRANITE: {"id": "liquid_heavy_xiranite", "name": "液化重息壞", "nameZh": "液化重息壞", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "liquid", "canDump": true, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Liquid Heavy Xiranite"},
+  XIRCON_EFFLUENT: {"id": "xircon_effluent", "name": "壞晶废液", "nameZh": "壞晶废液", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "liquid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Xircon Effluent"},
+  INERT_XIRCONN_EFFLUENT: {"id": "inert_xirconn_effluent", "name": "惰性壞晶废液", "nameZh": "惰性壞晶废液", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "liquid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Inert Xirconn Effluent"},
+  CUPRIUM_SOLUTION: {"id": "cuprium_solution", "name": "赤铜溶液", "nameZh": "赤铜溶液", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "liquid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Cuprium Solution"},
+  HETONITE_SOLUTION: {"id": "hetonite_solution", "name": "赫铜溶液", "nameZh": "赫铜溶液", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "liquid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Hetonite Solution"},
+  SEWAGE: {"id": "sewage", "name": "污水", "nameZh": "污水", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "liquid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Sewage"},
+  CARBON: {"id": "carbon", "name": "碳块", "nameZh": "碳块", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Carbon"},
+  ORIGOCRUST: {"id": "origocrust", "name": "晶体外壳", "nameZh": "晶体外壳", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Origocrust"},
+  ANHETHYST_FIBER: {"id": "anhethyst_fiber", "name": "紫晶纤维", "nameZh": "紫晶纤维", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Anhethyst Fiber"},
+  FERRIUM: {"id": "ferrium", "name": "蓝铁块", "nameZh": "蓝铁块", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Ferrium"},
+  CUPRIUM: {"id": "cuprium", "name": "赤铜块", "nameZh": "赤铜块", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Cuprium"},
+  STABILIZED_CARBON: {"id": "stabilized_carbon", "name": "稳定碳块", "nameZh": "稳定碳块", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Stabilized Carbon"},
+  PACKED_ORIGOCRUST: {"id": "packed_origocrust", "name": "密制晶体", "nameZh": "密制晶体", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Packed Origocrust"},
+  CRYSTON_FIBER: {"id": "cryston_fiber", "name": "高晶纤维", "nameZh": "高晶纤维", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Cryston Fiber"},
+  STEEL: {"id": "steel", "name": "钢块", "nameZh": "钢块", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Steel"},
+  HETONITE: {"id": "hetonite", "name": "赫铜块", "nameZh": "赫铜块", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Hetonite"},
+  BUMPER_RICH: {"id": "bumper_rich", "name": "膨地啪", "nameZh": "膨地啪", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Bumper-Rich"},
+  XIRANITE: {"id": "xiranite", "name": "息壞", "nameZh": "息壞", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Xiranite"},
+  HEAVY_XIRANITE: {"id": "heavy_xiranite", "name": "重息壞", "nameZh": "重息壞", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Heavy Xiranite"},
+  XIRCON: {"id": "xircon", "name": "壞晶", "nameZh": "壞晶", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Xircon"},
+  CARBON_POWDER: {"id": "carbon_powder", "name": "碳粉末", "nameZh": "碳粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Carbon Powder"},
+  ORIGINIUM_POWDER: {"id": "originium_powder", "name": "源石粉末", "nameZh": "源石粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Originium Powder"},
+  ORIGOCRUST_POWDER: {"id": "origocrust_powder", "name": "晶体外壳粉末", "nameZh": "晶体外壳粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Origocrust Powder"},
+  AMETHYST_POWDER: {"id": "amethyst_powder", "name": "紫晶粉末", "nameZh": "紫晶粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Amethyst Powder"},
+  FERRIUM_POWDER: {"id": "ferrium_powder", "name": "蓝铁粉末", "nameZh": "蓝铁粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Ferrium Powder"},
+  CUPRIUM_POWDER: {"id": "cuprium_powder", "name": "赤铜粉末", "nameZh": "赤铜粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Cuprium Powder"},
+  SANDLEAF_POWDER: {"id": "sandleaf_powder", "name": "砂叶粉末", "nameZh": "砂叶粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Sandleaf Powder"},
+  AKETINE_POWDER: {"id": "aketine_powder", "name": "酮化灌木粉末", "nameZh": "酮化灌木粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Aketine Powder"},
+  GROUND_BUCKFLOWER_POWDER: {"id": "ground_buckflower_powder", "name": "细磨荞花粉末", "nameZh": "细磨荞花粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Ground Buckflower Powder"},
+  GROUND_CITROME_POWDER: {"id": "ground_citrome_powder", "name": "细磨柑实粉末", "nameZh": "细磨柑实粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Ground Citrome Powder"},
+  DENSE_CARBON_POWDER: {"id": "dense_carbon_powder", "name": "致密碳粉末", "nameZh": "致密碳粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Dense Carbon Powder"},
+  DENSE_ORIGINIUM_POWDER: {"id": "dense_originium_powder", "name": "致密源石粉末", "nameZh": "致密源石粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Dense Originium Powder"},
+  DENSE_ORIGOCRUST_POWDER: {"id": "dense_origocrust_powder", "name": "致密晶体粉末", "nameZh": "致密晶体粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Dense Origocrust Powder"},
+  CRYSTON_POWDER: {"id": "cryston_powder", "name": "高晶粉末", "nameZh": "高晶粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Cryston Powder"},
+  DENSE_FERRIUM_POWDER: {"id": "dense_ferrium_powder", "name": "致密蓝铁粉末", "nameZh": "致密蓝铁粉末", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Dense Ferrium Powder"},
+  AMETHYST_BOTTLE: {"id": "amethyst_bottle", "name": "紫晶质瓶", "nameZh": "紫晶质瓶", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": true, "nameEn": "Amethyst Bottle"},
+  FERRIUM_BOTTLE: {"id": "ferrium_bottle", "name": "蓝铁瓶", "nameZh": "蓝铁瓶", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": true, "nameEn": "Ferrium Bottle"},
+  CRYSTON_BOTTLE: {"id": "cryston_bottle", "name": "高晶质瓶", "nameZh": "高晶质瓶", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": true, "nameEn": "Cryston Bottle"},
+  STEEL_BOTTLE: {"id": "steel_bottle", "name": "钢质瓶", "nameZh": "钢质瓶", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": true, "nameEn": "Steel Bottle"},
+  CUPRIUM_BOTTLE: {"id": "cuprium_bottle", "name": "赤铜瓶", "nameZh": "赤铜瓶", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": true, "nameEn": "Cuprium Bottle"},
+  CUPRIUM_BOTTLE_2: {"id": "cuprium_bottle_2", "name": "赫铜瓶", "nameZh": "赫铜瓶", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": true, "nameEn": "Cuprium Bottle"},
+  AMETHYST_PART: {"id": "amethyst_part", "name": "紫晶零件", "nameZh": "紫晶零件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Amethyst Part"},
+  FERRIUM_PART: {"id": "ferrium_part", "name": "铁制零件", "nameZh": "铁制零件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Ferrium Part"},
+  CRYSTON_PART: {"id": "cryston_part", "name": "高晶零件", "nameZh": "高晶零件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Cryston Part"},
+  CRYSTON_PART_2: {"id": "cryston_part_2", "name": "钢制零件", "nameZh": "钢制零件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Cryston Part"},
+  CRYSTON_PART_3: {"id": "cryston_part_3", "name": "赤铜零件", "nameZh": "赤铜零件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Cryston Part"},
+  HETONITE_PART: {"id": "hetonite_part", "name": "赫铜零件", "nameZh": "赫铜零件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Hetonite Part"},
+  AMETHYST_COMPONENT: {"id": "amethyst_component", "name": "紫晶装备原件", "nameZh": "紫晶装备原件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Amethyst Component"},
+  FERRIUM_COMPONENT: {"id": "ferrium_component", "name": "蓝铁装备原件", "nameZh": "蓝铁装备原件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Ferrium Component"},
+  CRYSTON_COMPONENT: {"id": "cryston_component", "name": "高晶装备原件", "nameZh": "高晶装备原件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Cryston Component"},
+  XIRANITE_COMPONENT: {"id": "xiranite_component", "name": "息壞装备原件", "nameZh": "息壞装备原件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Xiranite Component"},
+  CUPRIUM_COMPONENT: {"id": "cuprium_component", "name": "赤铜装备原件", "nameZh": "赤铜装备原件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Cuprium Component"},
+  HETONITE_COMPONENT: {"id": "hetonite_component", "name": "赫铜装备原件", "nameZh": "赫铜装备原件", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Hetonite Component"},
+  LC_VALLEY_BATTERY: {"id": "lc_valley_battery", "name": "低容谷地电池", "nameZh": "低容谷地电池", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "LC Valley Battery", "powerGenerationRaw": "220/40s"},
+  SC_VALLEY_BATTERY: {"id": "sc_valley_battery", "name": "中容谷地电池", "nameZh": "中容谷地电池", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "SC Valley Battery", "powerGenerationRaw": "420/40s"},
+  HC_VALLEY_BATTERY: {"id": "hc_valley_battery", "name": "高容谷地电池", "nameZh": "高容谷地电池", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "HC Valley Battery", "powerGenerationRaw": "1100/40s"},
+  HC_VALLEY_BATTERY_2: {"id": "hc_valley_battery_2", "name": "低容武陵电池", "nameZh": "低容武陵电池", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "HC Valley Battery", "powerGenerationRaw": "1600/40s"},
+  HC_VALLEY_BATTERY_3: {"id": "hc_valley_battery_3", "name": "中容武陵电池", "nameZh": "中容武陵电池", "icon": 0, "itemCategory": "aic_product", "storageCategory": "products", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "HC Valley Battery", "powerGenerationRaw": "3200/40s"},
+  INDUSTRIAL_EXPLOSIVE: {"id": "industrial_explosive", "name": "工业爆炸物", "nameZh": "工业爆炸物", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Industrial Explosive"},
+  BUCKFLOWER_POWDER: {"id": "buckflower_powder", "name": "荞花粉末", "nameZh": "荞花粉末", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Buckflower Powder"},
+  BUCKFLOWER_POWDER_2: {"id": "buckflower_powder_2", "name": "柑实粉末", "nameZh": "柑实粉末", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Buckflower Powder"},
+  JINCAO_POWDER: {"id": "jincao_powder", "name": "锦草粉末", "nameZh": "锦草粉末", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Jincao Powder"},
+  YAZHEN_POWDER: {"id": "yazhen_powder", "name": "芽针粉末", "nameZh": "芽针粉末", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "green", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": false, "isBottle": false, "nameEn": "Yazhen Powder"},
+  BUCK_CAPSULE_C: {"id": "buck_capsule_c", "name": "荞愈胶囊", "nameZh": "荞愈胶囊", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Buck Capsule [C]"},
+  BUCK_CAPSULE_B: {"id": "buck_capsule_b", "name": "优质荞愈胶囊", "nameZh": "优质荞愈胶囊", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Buck Capsule [B]"},
+  CANNED_CITROME_C: {"id": "canned_citrome_c", "name": "柑实罐头", "nameZh": "柑实罐头", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Canned Citrome [C]"},
+  CANNED_CITROME_B: {"id": "canned_citrome_b", "name": "优质柑实罐头", "nameZh": "优质柑实罐头", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Canned Citrome [B]"},
+  JINCAO_DRINK: {"id": "jincao_drink", "name": "锦草软饮", "nameZh": "锦草软饮", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Jincao Drink"},
+  YAZHEN_SYRINGE_C: {"id": "yazhen_syringe_c", "name": "芽针针剂", "nameZh": "芽针针剂", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "blue", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Yazhen Syringe [C]"},
+  BUCK_CAPSULE_A: {"id": "buck_capsule_a", "name": "精选荞愈胶囊", "nameZh": "精选荞愈胶囊", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Buck Capsule [A]"},
+  CANNED_CITROME_A: {"id": "canned_citrome_a", "name": "精选柑实罐头", "nameZh": "精选柑实罐头", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Canned Citrome [A]"},
+  JINCAO_TEA: {"id": "jincao_tea", "name": "优质锦草软饮", "nameZh": "优质锦草软饮", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Jincao Tea"},
+  YAZHEN_SYRINGE_A: {"id": "yazhen_syringe_a", "name": "优质芽针针剂", "nameZh": "优质芽针针剂", "icon": 0, "itemCategory": "usable_item", "storageCategory": "usables", "rarity": "purple", "state": "solid", "canDump": false, "isSourceProduct": false, "isRecyclable": false, "isFinalProduct": true, "isBottle": false, "nameEn": "Yazhen Syringe [A]"},
 };
