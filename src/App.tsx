@@ -13,7 +13,7 @@ import { SaveDialog } from './components/SaveDialog';
 import { saveBlueprint, type Blueprint, getLastBlueprintId, loadBlueprint, setLastBlueprintId } from './utils/storage';
 import { Toaster, Toast } from '@chakra-ui/react';
 import { toaster } from './utils/toaster';
-import { MACHINES } from './config/machines';
+import { MACHINES } from './config/facilities';
 import { getRotatedDimensions } from './utils/machineUtils';
 import './App.css';
 import { parseShareUrl } from './utils/shareUtils';

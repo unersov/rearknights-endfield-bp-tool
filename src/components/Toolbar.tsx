@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { MACHINES } from '../config/machines';
+import { MACHINES } from '../config/facilities';
 import { GameMode } from '../types';
 import classNames from 'classnames';
 import { MousePointer2, Zap, BoxSelect } from 'lucide-react';

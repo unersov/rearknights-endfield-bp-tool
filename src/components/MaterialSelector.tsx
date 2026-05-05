@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGameStore } from '../store/gameStore';
-import { getMachineConfig } from '../config/machines';
+import { getMachineConfig } from '../config/facilities';
 import { Dialog, Grid, VStack, Box, Text, CloseButton, Flex } from '@chakra-ui/react';
 
 export const MaterialSelector: React.FC = () => {

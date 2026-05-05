@@ -1,5 +1,5 @@
 import type { Point, PlacedMachine } from '../types';
-import { MACHINES } from '../config/machines';
+import { MACHINES } from '../config/facilities';
 
 import { getRotatedDimensions } from './machineUtils';
 

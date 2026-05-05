@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { GameMode } from '../types';
 import type { Connection, PlacedMachine, Point, Direction } from '../types';
-import { MACHINES } from '../config/machines';
+import { MACHINES } from '../config/facilities';
 import { checkCollision, findPath } from '../utils/gridUtils';
 import { getRotatedDimensions, getRotatedPorts } from '../utils/machineUtils';
 

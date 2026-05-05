@@ -31,7 +31,7 @@ export type RecipeId = string;
 export interface RecipeItemAmount { materialId: string; amount: number; }
 export interface Recipe { id: RecipeId; name: string; machineId: string; durationSeconds: number; inputs: RecipeItemAmount[]; outputs: RecipeItemAmount[]; notes?: string; }
 
-export interface MachineConfig { id: string; name: string; power: number; width: number; height: number; inputs: PortConfig[]; outputs: PortConfig[]; color: string; icon?: string; supplyRange?: number; category: string; allowedMaterials?: Material[]; }
+export interface MachineConfig { id: string; name: string; nameEn?: string; power: number; width: number; height: number; inputs: PortConfig[]; outputs: PortConfig[]; color: string; icon?: string; supplyRange?: number; category: string; allowedItems?: Material[]; allowedMaterials?: Material[]; }
 export type Side = 'top' | 'right' | 'bottom' | 'left';
 export interface PortConfig { x: number; y: number; side: Side; }
 export type Direction = 0 | 1 | 2 | 3;

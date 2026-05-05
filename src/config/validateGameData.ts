@@ -1,5 +1,5 @@
-import { MACHINES } from './machines';
-import { MATERIALS } from './materials';
+import { MACHINES } from './facilities';
+import { MATERIALS } from './items';
 import { RECIPES } from './recipes';
 
 export interface ValidationResult {

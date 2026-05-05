@@ -3,7 +3,7 @@ import { Icon } from '@iconify/react';
 import classNames from 'classnames';
 import { GameMode } from '../types';
 import type { PlacedMachine } from '../types';
-import { getMachineConfig } from '../config/machines';
+import { getMachineConfig } from '../config/facilities';
 import { useGameStore } from '../store/gameStore';
 import './Machine.scss';
 import { getRotatedDimensions, getRotatedPorts, isMachinePowered } from '../utils/machineUtils';

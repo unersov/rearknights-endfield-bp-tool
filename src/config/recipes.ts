@@ -1,5 +1,5 @@
 import type { Recipe } from '../types';
-import { MATERIALS } from './materials';
+import { MATERIALS } from './items';
 
 // Placeholder recipes only for data-structure validation and integration tests.
 // These values do NOT represent final or authoritative in-game production data.
