@@ -1,4 +1,4 @@
-材料：
+物品(Items)：
 物品分类有 自然资源Natural Resources，采集材料Gatherables，珍贵材料Rare Materials，工业产物AIC Products，可用道具Usable Items，功能道具Functional Items
 仓库分类有 矿物Minerals，植物Plants，产物Products，采集材料Gatherables，培养素材Progression，可用道具Usables，生产工具Production
 品质从低到高有 灰色，绿色，蓝色，紫色，金色，橙色
@@ -7,8 +7,10 @@
 可循环的植物和种子是可以自循环无限产出的
 目前为止任意液体都可以装进任意瓶子里，理论上能拥有几十上百种不同的配方和产物，我就不一一列出了，我只列出常用的和会参与合成的配方。可以这么做。所有拥有 瓶子 属性的物品都可以额外增加一个数据，就是内容物是什么。默认是空。每个瓶子能装1点任意液体。
 
-设施:
-所有设施均可以任意方向旋转，90度的倍率
+设施（Facilities）:
+设施分类有资源开采Resourcing, 物流设备Logistics Units, 仓库存取Depot Access, 基础生产Production I, 合成制造Production II, 电力供应Power, 功能设备Miscellaneous
+所有设施均可以任意方向旋转，90度的倍率，但是不能镜像翻转
+协议核心理论上是无法被移除的，但是为了建造蓝图的便利这边可以移除，并且归类在功能设备里
 输入输出口的朝向为 L朝左，R朝右，U朝上，D朝下。例如 3,0U的意思就是在x=3，y=0的坐标存在一个朝向为向上的出入口
 目前出入口朝向均指向设施的外围。也就是出口的朝向为物品物流方向，入口的朝向为物流方向的相反。
 传送带和管道占用一个格子，可以90度拐弯，不耗电，可以首尾相接
