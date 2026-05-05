@@ -1,0 +1,96 @@
+名称,英文名称,物品分类,仓库分类,稀有度,是否液体/可否排放,发电量,
+源矿,Originium Ore,自然资源,矿物,灰色,,50/5s,源头产物
+紫晶矿,Amethyst Ore,自然资源,矿物,灰色,,,源头产物
+蓝铁矿,Ferrium Ore,自然资源,矿物,灰色,,,源头产物
+赤铜矿,Cuprium Ore,自然资源,矿物,灰色,,,源头产物
+荞花,Buckflower,自然资源,植物,灰色,,,可循环
+荞花种子,Buckflower Seed,自然资源,植物,灰色,,,可循环
+柑实,Citrome,自然资源,植物,灰色,,,可循环
+柑实种子,Citrome Seed,自然资源,植物,灰色,,,可循环
+砂叶,Sandleaf,自然资源,植物,灰色,,,可循环
+砂叶种子,Sandleaf Seed,自然资源,植物,灰色,,,可循环
+酮化灌木,Aketine,自然资源,植物,灰色,,,可循环
+酮化树种,Aketine Seed,自然资源,植物,灰色,,,可循环
+锦草,Jincao,自然资源,植物,灰色,,,可循环
+锦草种子,Jincao Seed,自然资源,植物,灰色,,,可循环
+芽针,Yazhen,自然资源,植物,灰色,,,可循环
+芽针种子,Yazhen Seed,自然资源,植物,灰色,,,可循环
+清水,Clean Water,自然资源,,灰色,液体/可排放,,源头产物
+驮兽粪便,Burdo-Muck,采集材料,采集材料,灰色,,,
+沉积酸,Precipitation Acid,自然资源,,灰色,液体/可排放,,源头产物
+锦草溶液,Jincao Solution,工业产物,产物,蓝色,,,
+芽针溶液,Yazhen Solution,工业产物,产物,蓝色,液体/可排放,,
+液化息壞,Liquid Xiranite,工业产物,产物,蓝色,液体/可排放,,
+液化重息壞,Liquid Heavy Xiranite,工业产物,产物,蓝色,液体/可排放,,
+壞晶废液,Xircon Effluent,工业产物,产物,蓝色,液体/不可排放,,
+惰性壞晶废液,Inert Xirconn Effluent,工业产物,产物,蓝色,液体/不可排放,,
+赤铜溶液,Cuprium Solution,工业产物,产物,蓝色,液体/不可排放,,
+赫铜溶液,Hetonite Solution,工业产物,产物,蓝色,液体/不可排放,,
+污水,Sewage,工业产物,产物,蓝色,液体/不可排放,,
+碳块,Carbon,工业产物,产物,绿色,,,
+晶体外壳,Origocrust,工业产物,产物,绿色,,,
+紫晶纤维,Anhethyst Fiber,工业产物,产物,绿色,,,
+蓝铁块,Ferrium,工业产物,产物,绿色,,,
+赤铜块,Cuprium,工业产物,产物,绿色,,,
+稳定碳块,Stabilized Carbon,工业产物,产物,蓝色,,,
+密制晶体,Packed Origocrust,工业产物,产物,蓝色,,,
+高晶纤维,Cryston Fiber,工业产物,产物,蓝色,,,
+钢块,Steel,工业产物,产物,蓝色,,,
+赫铜块,Hetonite,工业产物,产物,蓝色,,,
+膨地啪,Bumper-Rich,工业产物,产物,蓝色,,,终端产物
+息壞,Xiranite,工业产物,产物,绿色,,,
+重息壞,Heavy Xiranite,工业产物,产物,蓝色,,,
+壞晶,Xircon,工业产物,产物,蓝色,,,
+碳粉末,Carbon Powder,工业产物,产物,绿色,,,
+源石粉末,Originium Powder,工业产物,产物,绿色,,,
+晶体外壳粉末,Origocrust Powder,工业产物,产物,绿色,,,
+紫晶粉末,Amethyst Powder,工业产物,产物,绿色,,,
+蓝铁粉末,Ferrium Powder,工业产物,产物,绿色,,,
+赤铜粉末,Cuprium Powder,工业产物,产物,绿色,,,
+砂叶粉末,Sandleaf Powder,工业产物,产物,绿色,,,
+酮化灌木粉末,Aketine Powder,工业产物,产物,绿色,,,
+细磨荞花粉末,Ground Buckflower Powder,工业产物,产物,蓝色,,,
+细磨柑实粉末,Ground Citrome Powder,工业产物,产物,蓝色,,,
+致密碳粉末,Dense Carbon Powder,工业产物,产物,蓝色,,,
+致密源石粉末,Dense Originium Powder,工业产物,产物,蓝色,,,
+致密晶体粉末,Dense Origocrust Powder,工业产物,产物,蓝色,,,
+高晶粉末,Cryston Powder,工业产物,产物,蓝色,,,
+致密蓝铁粉末,Dense Ferrium Powder,工业产物,产物,蓝色,,,
+紫晶质瓶,Amethyst Bottle,工业产物,产物,绿色,,,瓶子
+蓝铁瓶,Ferrium Bottle,工业产物,产物,绿色,,,瓶子
+高晶质瓶,Cryston Bottle,工业产物,产物,蓝色,,,瓶子
+钢质瓶,Steel Bottle,工业产物,产物,蓝色,,,瓶子
+赤铜瓶,Cuprium Bottle,工业产物,产物,蓝色,,,瓶子
+赫铜瓶,Cuprium Bottle,工业产物,产物,蓝色,,,瓶子
+紫晶零件,Amethyst Part,工业产物,产物,绿色,,,
+铁制零件,Ferrium Part,工业产物,产物,绿色,,,
+高晶零件,Cryston Part,工业产物,产物,蓝色,,,
+钢制零件,Cryston Part,工业产物,产物,蓝色,,,
+赤铜零件,Cryston Part,工业产物,产物,蓝色,,,
+赫铜零件,Hetonite Part,工业产物,产物,紫色,,,
+紫晶装备原件,Amethyst Component,工业产物,产物,绿色,,,终端产物
+蓝铁装备原件,Ferrium Component,工业产物,产物,绿色,,,终端产物
+高晶装备原件,Cryston Component,工业产物,产物,蓝色,,,终端产物
+息壞装备原件,Xiranite Component,工业产物,产物,紫色,,,终端产物
+赤铜装备原件,Cuprium Component,工业产物,产物,紫色,,,终端产物
+赫铜装备原件,Hetonite Component,工业产物,产物,紫色,,,终端产物
+低容谷地电池,LC Valley Battery,工业产物,产物,蓝色,,220/40s,终端产物
+中容谷地电池,SC Valley Battery,工业产物,产物,蓝色,,420/40s,终端产物
+高容谷地电池,HC Valley Battery,工业产物,产物,紫色,,1100/40s,终端产物
+低容武陵电池,HC Valley Battery,工业产物,产物,紫色,,1600/40s,终端产物
+中容武陵电池,HC Valley Battery,工业产物,产物,紫色,,3200/40s,终端产物
+工业爆炸物,Industrial Explosive,可用道具,可用道具,蓝色,,,终端产物
+荞花粉末,Buckflower Powder,可用道具,可用道具,绿色,,,
+柑实粉末,Buckflower Powder,可用道具,可用道具,绿色,,,
+锦草粉末,Jincao Powder,可用道具,可用道具,绿色,,,
+芽针粉末,Yazhen Powder,可用道具,可用道具,绿色,,,
+荞愈胶囊,Buck Capsule [C],可用道具,可用道具,蓝色,,,终端产物
+优质荞愈胶囊,Buck Capsule [B],可用道具,可用道具,蓝色,,,终端产物
+柑实罐头,Canned Citrome [C],可用道具,可用道具,蓝色,,,终端产物
+优质柑实罐头,Canned Citrome [B],可用道具,可用道具,蓝色,,,终端产物
+锦草软饮,Jincao Drink,可用道具,可用道具,蓝色,,,终端产物
+芽针针剂,Yazhen Syringe [C],可用道具,可用道具,蓝色,,,终端产物
+精选荞愈胶囊,Buck Capsule [A],可用道具,可用道具,紫色,,,终端产物
+精选柑实罐头,Canned Citrome [A],可用道具,可用道具,紫色,,,终端产物
+优质锦草软饮,Jincao Tea,可用道具,可用道具,紫色,,,终端产物
+优质芽针针剂,Yazhen Syringe [A],可用道具,可用道具,紫色,,,终端产物
