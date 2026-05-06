@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { MACHINES } from '../config/machines';
+import { FACILITIES } from '../config/facilities';
 import { GameMode } from '../types';
 import classNames from 'classnames';
 import { MousePointer2, Zap, BoxSelect } from 'lucide-react';
@@ -9,6 +9,7 @@ import './Toolbar.scss';
 
 const TABS = [
     { id: 'core', label: '核心' },
+    { id: 'resourcing', label: '资源开采' },
     { id: 'logistics', label: '物流' },
     { id: 'storage', label: '倉儲存取' },
     { id: 'production', label: '基礎生產' },
@@ -20,7 +21,7 @@ export const Toolbar = () => {
     const { selectedMachineId, selectMachine, mode, setMode } = useGameStore();
     const [activeTab, setActiveTab] = useState('production');
 
-    const filteredMachines = MACHINES.filter(m => m.category === activeTab);
+    const filteredFacilities = FACILITIES.filter(facility => facility.category === activeTab);
 
     return (
         <div className="toolbar-container">
@@ -84,17 +85,16 @@ export const Toolbar = () => {
                 <div className="divider"></div>
 
                 <div className="section machines">
-                    {filteredMachines.map(m => (
-                        <div className="btn-wrap" onClick={() => selectMachine(m.id)}>
+                    {filteredFacilities.map(m => (
+                        <div key={m.id} className="btn-wrap" onClick={() => selectMachine(m.id)}>
                             <button
-                                key={m.id}
                                 className={classNames('machine-btn', { active: selectedMachineId === m.id })}
                                 title={m.name}
                                 style={{ '--machine-color': m.color } as React.CSSProperties}
                             >
                                 <img
                                     className="icon"
-                                    src={new URL(`../assets/machines/${m.id}.webp`, import.meta.url).href}
+                                    src={new URL(`../assets/machines/${m.icon || m.id}.webp`, import.meta.url).href}
                                     alt={m.name}
                                 />
                                 <span>{m.name}</span>

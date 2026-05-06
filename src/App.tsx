@@ -13,7 +13,7 @@ import { SaveDialog } from './components/SaveDialog';
 import { saveBlueprint, type Blueprint, getLastBlueprintId, loadBlueprint, setLastBlueprintId } from './utils/storage';
 import { Toaster, Toast } from '@chakra-ui/react';
 import { toaster } from './utils/toaster';
-import { MACHINES } from './config/machines';
+import { FACILITIES } from './config/facilities';
 import { getRotatedDimensions } from './utils/machineUtils';
 import './App.css';
 import { parseShareUrl } from './utils/shareUtils';
@@ -132,7 +132,7 @@ export default function App() {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
     selectedMachines.forEach(m => {
-      const config = MACHINES.find(c => c.id === m.machineId);
+      const config = FACILITIES.find(c => c.id === m.machineId);
       if (config) {
         const { width, height } = getRotatedDimensions(config.width, config.height, m.rotation);
         minX = Math.min(minX, m.x);

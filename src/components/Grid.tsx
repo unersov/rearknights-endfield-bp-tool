@@ -3,7 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import { Machine } from './Machine';
 import { GameMode } from '../types';
 import type { Point } from '../types';
-import { MACHINES } from '../config/machines';
+import { FACILITIES } from '../config/facilities';
 import classNames from 'classnames';
 import './Grid.scss';
 import { checkCollision } from '../utils/gridUtils';
@@ -220,7 +220,7 @@ export const Grid = () => {
     };
 
     // 預覽機器計算
-    const ghostConfig = (mode === GameMode.BUILD && selectedMachineId) ? MACHINES.find(m => m.id === selectedMachineId) : null;
+    const ghostConfig = (mode === GameMode.BUILD && selectedMachineId) ? FACILITIES.find(m => m.id === selectedMachineId) : null;
     let isGhostInvalid = false;
     let ghostWidth = 0;
     let ghostHeight = 0;

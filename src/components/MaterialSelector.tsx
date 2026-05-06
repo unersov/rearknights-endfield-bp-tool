@@ -1,13 +1,13 @@
 import React from 'react';
 import { useGameStore } from '../store/gameStore';
-import { getMachineConfig } from '../config/machines';
+import { getFacilityConfig } from '../config/facilities';
 import { Dialog, Grid, VStack, Box, Text, CloseButton, Flex } from '@chakra-ui/react';
 
 export const MaterialSelector: React.FC = () => {
     const { materialSelectorMachineId, machines, closeMaterialSelector, setMachineMaterial } = useGameStore();
 
     const machine = materialSelectorMachineId ? machines.find(m => m.id === materialSelectorMachineId) : null;
-    const config = machine ? getMachineConfig(machine.machineId) : null;
+    const config = machine ? getFacilityConfig(machine.machineId) : null;
 
     const isOpen = !!machine;
 
@@ -19,7 +19,7 @@ export const MaterialSelector: React.FC = () => {
 
     if (!config) return null;
 
-    const materials = config.allowedMaterials || [];
+    const items = config.allowedItems || config.allowedMaterials || [];
 
     return (
         <Dialog.Root open={isOpen} onOpenChange={(e) => !e.open && closeMaterialSelector()}>
@@ -44,13 +44,13 @@ export const MaterialSelector: React.FC = () => {
                         </Dialog.Title>
                     </Dialog.Header>
                     <Dialog.Body pb={6} pt={2}>
-                        {materials.length === 0 ? (
+                        {items.length === 0 ? (
                             <Box py={8} textAlign="center" color="var(--gray-dark)" opacity={0.6}>
                                 <Text>此機器無可選圖標</Text>
                             </Box>
                         ) : (
                             <Grid templateColumns="repeat(auto-fill, minmax(80px, 1fr))" gap={4}>
-                                {materials.map((material) => {
+                                {items.map((material) => {
                                     const imagePath = new URL(`../assets/items/item_${material.icon}.webp`, import.meta.url).href;
                                     return (
                                         <VStack

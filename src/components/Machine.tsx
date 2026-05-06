@@ -3,7 +3,7 @@ import { Icon } from '@iconify/react';
 import classNames from 'classnames';
 import { GameMode } from '../types';
 import type { PlacedMachine } from '../types';
-import { getMachineConfig } from '../config/machines';
+import { getFacilityConfig } from '../config/facilities';
 import { useGameStore } from '../store/gameStore';
 import './Machine.scss';
 import { getRotatedDimensions, getRotatedPorts, isMachinePowered } from '../utils/machineUtils';
@@ -14,7 +14,7 @@ interface MachineProps {
 }
 
 export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
-    const config = getMachineConfig(data.machineId);
+    const config = getFacilityConfig(data.machineId);
     const { mode, startWiring, wiringSource, commitWiring, isWiring, zoom, pickupMachine, machines, openMaterialSelector } = useGameStore();
     const pressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -169,8 +169,9 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
 
     // 尋找選中的材料圖標
     let selectedMaterialIcon: number | null = null;
-    if (data.selectedMaterialId && config.allowedMaterials) {
-        const mat = config.allowedMaterials.find(m => m.id === data.selectedMaterialId);
+    const allowedItems = config.allowedItems || config.allowedMaterials || [];
+    if (data.selectedMaterialId) {
+        const mat = allowedItems.find(m => m.id === data.selectedMaterialId);
         if (mat) {
             selectedMaterialIcon = mat.icon;
         }
@@ -200,7 +201,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                     <div>[長按] 移動</div>
                 </div>
 
-                {(!isMachinePowered(data, machines, getMachineConfig)) && (
+                {(!isMachinePowered(data, machines, getFacilityConfig)) && (
                     <div
                         className="power-alert-icon"
                         style={{

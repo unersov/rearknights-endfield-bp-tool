@@ -11,7 +11,7 @@
 - `src/config/machines.ts`（将硬编码材料白名单改为 `Object.values(MATERIALS)` 以兼容新材料键名）
 
 ## 3) CSV 字段到 Material 字段映射
-- 名称 -> `name` / `nameZh`
+- 名称 -> `name`
 - 英文名称 -> `nameEn`
 - 物品分类 -> `itemCategory`（中文映射到枚举）
 - 仓库分类 -> `storageCategory`（中文映射到枚举；液体自然资源空白时映射为 `none`）

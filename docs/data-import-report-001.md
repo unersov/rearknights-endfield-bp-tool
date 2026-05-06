@@ -13,7 +13,7 @@
 
 ## 2) CSV mapping plan (prepared)
 Defined target mapping for future import:
-- 名称 -> `nameZh`
+- 名称 -> `name`
 - 英文名称 -> `nameEn`
 - 物品分类 -> `itemCategory`
 - 仓库分类 -> `storageCategory`
@@ -45,7 +45,7 @@ Defined target mapping for future import:
 ## 6) Manual review needed
 1. Add `docs/info2update.csv` into repo.
 2. Add `docs/notes4ai` into repo.
-3. Confirm whether existing legacy `name` should continue as UI display primary field or switch to `nameZh`.
+3. Confirm whether existing legacy `name` should continue as UI display primary field.
 
 ## 7) Update locations (future)
 - 更新材料: `src/config/materials.ts`

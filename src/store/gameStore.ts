@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { GameMode } from '../types';
 import type { Connection, PlacedMachine, Point, Direction } from '../types';
-import { MACHINES } from '../config/machines';
+import { FACILITIES } from '../config/facilities';
 import { checkCollision, findPath } from '../utils/gridUtils';
 import { getRotatedDimensions, getRotatedPorts } from '../utils/machineUtils';
 
@@ -248,7 +248,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     addMachine: (machineId, x, y, rotation) => {
-        const config = MACHINES.find(m => m.id === machineId);
+        const config = FACILITIES.find(m => m.id === machineId);
         if (!config) return;
 
         // Collision Check
@@ -296,7 +296,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         let oldInputLocations = new Set<string>();
         if (shouldClearConnections && movingMachineBackup) {
-            const config = MACHINES.find(m => m.id === movingMachineBackup.machineId);
+            const config = FACILITIES.find(m => m.id === movingMachineBackup.machineId);
             if (config) {
                 const inputs = getRotatedPorts(config.inputs, config.width, config.height, movingMachineBackup.rotation);
                 inputs.forEach(p => {
@@ -422,7 +422,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (wiringFixedPath.length === 1) { // Only first point
             const sourceMachine = machines.find(m => m.id === wiringSource.machineId);
             if (sourceMachine) {
-                const config = MACHINES.find(m => m.id === sourceMachine.machineId);
+                const config = FACILITIES.find(m => m.id === sourceMachine.machineId);
                 if (config) {
                     const outputs = getRotatedPorts(config.outputs, config.width, config.height, sourceMachine.rotation);
                     if (outputs[wiringSource.portIndex]) {
@@ -436,7 +436,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         let endSide: 'top' | 'right' | 'bottom' | 'left' | undefined;
         // Naive check: is mouse on any machine's input port?
         for (const m of machines) {
-            const config = MACHINES.find(mc => mc.id === m.machineId);
+            const config = FACILITIES.find(mc => mc.id === m.machineId);
             if (!config) continue;
 
             const inputs = getRotatedPorts(config.inputs, config.width, config.height, m.rotation);
@@ -479,7 +479,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (wiringFixedPath.length === 1) {
             const sourceMachine = machines.find(m => m.id === wiringSource.machineId);
             if (sourceMachine) {
-                const config = MACHINES.find(m => m.id === sourceMachine.machineId);
+                const config = FACILITIES.find(m => m.id === sourceMachine.machineId);
                 if (config) {
                     const outputs = getRotatedPorts(config.outputs, config.width, config.height, sourceMachine.rotation);
                     if (outputs[wiringSource.portIndex]) {
@@ -513,7 +513,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         // Find target machine/port
         for (const m of machines) {
-            const config = MACHINES.find(mc => mc.id === m.machineId);
+            const config = FACILITIES.find(mc => mc.id === m.machineId);
             if (!config) continue;
 
             const inputs = getRotatedPorts(config.inputs, config.width, config.height, m.rotation);
@@ -560,7 +560,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
             // Check if occupied by any machine
             const isOccupied = machines.some(m => {
-                const config = MACHINES.find(c => c.id === m.machineId);
+                const config = FACILITIES.find(c => c.id === m.machineId);
                 if (!config) return false;
                 const { width, height } = getRotatedDimensions(config.width, config.height, m.rotation);
                 return x >= m.x && x < m.x + width && y >= m.y && y < m.y + height;
@@ -614,7 +614,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         // Filter Machines in Box
         const machineIdsInBox = machines.filter(m => {
-            const config = MACHINES.find(c => c.id === m.machineId);
+            const config = FACILITIES.find(c => c.id === m.machineId);
             if (!config) return false;
             const { width, height } = getRotatedDimensions(config.width, config.height, m.rotation);
             // Machine Rect
@@ -737,7 +737,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
         machines.forEach((m: any) => {
-            const config = MACHINES.find(c => c.id === m.machineId);
+            const config = FACILITIES.find(c => c.id === m.machineId);
             if (config) {
                 const { width, height } = getRotatedDimensions(config.width, config.height, m.rotation);
                 minX = Math.min(minX, m.x);
@@ -821,7 +821,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         // 1. Machines Bounds
         movingMachines.forEach(m => {
-            const config = MACHINES.find(c => c.id === m.machineId);
+            const config = FACILITIES.find(c => c.id === m.machineId);
             if (config) {
                 const { width, height } = getRotatedDimensions(config.width, config.height, m.rotation);
                 minX = Math.min(minX, m.x);
@@ -878,7 +878,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
         sourceMachines.forEach(m => {
-            const config = MACHINES.find(c => c.id === m.machineId);
+            const config = FACILITIES.find(c => c.id === m.machineId);
             if (config) {
                 const { width, height } = getRotatedDimensions(config.width, config.height, m.rotation);
                 minX = Math.min(minX, m.x);
@@ -990,7 +990,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         }));
 
         for (const m of placedMachines) {
-            const config = MACHINES.find(c => c.id === m.machineId);
+            const config = FACILITIES.find(c => c.id === m.machineId);
             if (!config) continue;
             const { width, height } = getRotatedDimensions(config.width, config.height, m.rotation);
             const rect = { x: m.x, y: m.y, width, height };

@@ -1,11 +1,11 @@
 import type { Point, PlacedMachine } from '../types';
-import { MACHINES } from '../config/machines';
+import { FACILITIES } from '../config/facilities';
 
 import { getRotatedDimensions } from './machineUtils';
 
 // Helper to get machine rect
 export const getMachineRect = (machine: PlacedMachine) => {
-    const config = MACHINES.find(m => m.id === machine.machineId);
+    const config = FACILITIES.find(m => m.id === machine.machineId);
     if (!config) return null;
     const { width, height } = getRotatedDimensions(config.width, config.height, machine.rotation);
     return {
@@ -118,7 +118,7 @@ export const findPath = (
         // and should be avoided by the A* path (which goes roughly from realStart to realEnd).
 
         for (const m of machines) {
-            const config = MACHINES.find(mc => mc.id === m.machineId);
+            const config = FACILITIES.find(mc => mc.id === m.machineId);
             if (!config) continue;
 
             const { width, height } = getRotatedDimensions(config.width, config.height, m.rotation);

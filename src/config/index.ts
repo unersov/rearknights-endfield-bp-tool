@@ -1,4 +1,4 @@
-export { ITEMS, MATERIALS } from './materials';
-export { FACILITIES, MACHINES } from './machines';
+export { ITEMS, MATERIALS } from './items';
+export { FACILITIES, MACHINES } from './facilities';
 export { RECIPES } from './recipes';
 export { validateGameData } from './validateGameData';
