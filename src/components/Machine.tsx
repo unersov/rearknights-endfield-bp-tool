@@ -7,8 +7,8 @@ import { getFacilityConfig } from '../config/facilities';
 import { useGameStore } from '../store/gameStore';
 import './Machine.scss';
 import { getRotatedDimensions, getRotatedPorts, isMachinePowered } from '../utils/machineUtils';
-import { getRarityColor } from '../utils/rarity';
 import { ItemIcon } from './ItemIcon';
+import { getItemByIdIncludingDynamic } from '../utils/dynamicRecipes';
 
 interface MachineProps {
     data: PlacedMachine;
@@ -45,8 +45,8 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        // 僅允許在建造模式下拾取...
-        if (e.button !== 0) return; // 僅左鍵點擊
+        // 仅允许在建造模式下拾取...
+        if (e.button !== 0) return; // 仅左键点击
 
         const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
         const localX = ((e.clientX - rect.left) / rect.width) * width;
@@ -91,8 +91,8 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         const style: React.CSSProperties = {};
 
         const CELL_SIZE = 40;
-        const GAP = 3; // 需與 CSS padding 保持一致
-        // 用於緊湊型端口計算位置...
+        const GAP = 3; // 需与 CSS padding 保持一致
+        // 用于紧凑型端口计算位置...
 
         // Compact Dimensions:
         // Port along-edge size (width for Top/Bottom, height for Left/Right) = 16px
@@ -111,7 +111,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
 
         switch (p.side) {
             case 'left':
-                style.left = `-1px`; // 重疊邊框
+                style.left = `-1px`; // 重叠边框
                 style.top = `${p.y * CELL_SIZE + centerOffset + axisOffset}px`;
                 style.transform = 'translate(0, -50%)';
                 break;
@@ -135,23 +135,23 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         return style;
     };
 
-    // 碰撞檢測輔助函數
+    // 碰撞检测辅助函数
     const getPortClasses = (currentPort: PortConfig) => {
         const classes: string[] = ['port', currentPort.side, currentPort.kind === 'pipe' ? 'pipe-port' : 'item-port'];
 
         // 仅对窄型/小型设施应用智能调整大小
         if (!isNarrowMachine) return classNames(classes);
 
-        // 尋找同一個格子內的其他端口
+        // 寻找同一个格子内的其他端口
         const allPorts = [...inputs, ...outputs];
         const peers = allPorts.filter(p => p.x === currentPort.x && p.y === currentPort.y && p.side !== currentPort.side);
 
         if (peers.length === 0) {
-            return classNames(classes); // 無碰撞，使用標準尺寸
+            return classNames(classes); // 无碰撞，使用标准尺寸
         }
 
-        let shrinkDepth = false; // 對面存在端口
-        let shrinkLength = false; // 相鄰存在端口
+        let shrinkDepth = false; // 对面存在端口
+        let shrinkLength = false; // 相邻存在端口
 
         const opposites: Record<string, string> = { 'left': 'right', 'right': 'left', 'top': 'bottom', 'bottom': 'top' };
 
@@ -159,7 +159,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
             if (peer.side === opposites[currentPort.side]) {
                 shrinkDepth = true;
             } else {
-                // 如果不是對面 (且邊不同)，則必定是相鄰
+                // 如果不是对面 (且边不同)，则必定是相邻
                 shrinkLength = true;
             }
         });
@@ -174,18 +174,17 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         e.stopPropagation();
         const kind = getConnectionKind(portRel);
         if (mode === modeForKind(kind)) {
-            // 計算端口的絕對網格座標
+            // 计算端口的绝对网格坐标
             const absX = data.x + portRel.x;
             const absY = data.y + portRel.y;
             startWiring(data.id, portIndex, { x: absX, y: absY }, kind);
         }
     };
 
-    // 尋找選中的材料圖標
+    // 寻找选中的材料图标
     let selectedMaterial: Item | null = null;
-    const allowedItems = config.allowedItems || config.allowedMaterials || [];
     if (data.selectedMaterialId) {
-        const mat = allowedItems.find(m => m.id === data.selectedMaterialId);
+        const mat = getItemByIdIncludingDynamic(data.selectedMaterialId);
         if (mat) {
             selectedMaterial = mat;
         }
@@ -196,10 +195,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
             className={classNames('machine-container', {
                 selected: isSelected,
             })}
-            style={{
-                ...style,
-                '--rarity-color': getRarityColor(config.rarity),
-            } as React.CSSProperties}
+            style={style}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
@@ -210,7 +206,6 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                     className="facility-image"
                     src={new URL(`../assets/facilities/${config.id}.webp`, import.meta.url).href}
                     alt={config.name}
-                    style={{ borderBottom: getRarityColor(config.rarity) ? `3px solid ${getRarityColor(config.rarity)}` : undefined }}
                 />
 
                 <div
@@ -250,7 +245,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                     </div>
                 )}
 
-                {/* 選中的材料圖標 */}
+                {/* 选中的材料图标 */}
                 {selectedMaterial !== null && (
                     <div
                         className="selected-material-icon"
@@ -268,12 +263,12 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                             justifyContent: 'center'
                         }}
                     >
-                        <ItemIcon item={selectedMaterial} size={40} />
+                        <ItemIcon item={selectedMaterial} size={40} showRarityBorder={false} />
                     </div>
                 )}
 
 
-                {/* 輸入 */}
+                {/* 输入 */}
                 {inputs.map((p, i) => {
                     const isConnectable = isWiring && mode === modeForKind(getConnectionKind(p));
 
@@ -294,7 +289,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                     );
                 })}
 
-                {/* 輸出 */}
+                {/* 输出 */}
                 {outputs.map((p, i) => {
                     const isConnectable = mode === modeForKind(getConnectionKind(p));
 

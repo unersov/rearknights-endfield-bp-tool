@@ -4,6 +4,7 @@ import type { Connection, ConnectionKind, PlacedMachine, Point, Direction, Side 
 import { FACILITIES } from '../config/facilities';
 import { checkCollision, findPath } from '../utils/gridUtils';
 import { getRotatedDimensions, getRotatedPorts } from '../utils/machineUtils';
+import { findMatchingRecipeByInputs } from '../utils/dynamicRecipes';
 
 interface HistorySnapshot {
     machines: PlacedMachine[];
@@ -111,6 +112,50 @@ interface GameState {
     setZoom: (zoom: number) => void;
     setPan: (pan: Point) => void;
 }
+
+const deriveAutoRecipeProducts = (machines: PlacedMachine[], connections: Connection[]) => {
+    let nextMachines = machines;
+    let changed = false;
+    let passChanged = true;
+    let passCount = 0;
+
+    const incomingByMachine = new Map<string, Connection[]>();
+    connections.forEach(connection => {
+        if (!connection.toOriginal) return;
+        const incoming = incomingByMachine.get(connection.toOriginal.machineId) || [];
+        incoming.push(connection);
+        incomingByMachine.set(connection.toOriginal.machineId, incoming);
+    });
+
+    while (passChanged && passCount < machines.length + 1) {
+        passCount += 1;
+        passChanged = false;
+
+        for (const machine of nextMachines) {
+            const incoming = incomingByMachine.get(machine.id);
+            if (!incoming || incoming.length === 0) continue;
+
+            const inputItemIds = incoming.map(connection => {
+                const source = nextMachines.find(candidate => candidate.id === connection.fromOriginal.machineId);
+                return source?.selectedMaterialId;
+            });
+
+            const nextMaterialId = inputItemIds.every(Boolean)
+                ? findMatchingRecipeByInputs(machine.machineId, inputItemIds as string[])?.outputs[0]?.materialId
+                : undefined;
+
+            if (machine.selectedMaterialId === nextMaterialId) continue;
+
+            changed = true;
+            passChanged = true;
+            nextMachines = nextMachines.map(candidate =>
+                candidate.id === machine.id ? { ...candidate, selectedMaterialId: nextMaterialId } : candidate
+            );
+        }
+    }
+
+    return changed ? nextMachines : machines;
+};
 
 export const useGameStore = create<GameState>((set, get) => ({
     machines: [],
@@ -335,9 +380,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         get().takeSnapshot();
 
-        set(state => ({
-            machines: [...state.machines, newMachine],
-            connections: shouldClearConnections
+        set(state => {
+            const nextConnections = shouldClearConnections
                 ? state.connections.filter(c => {
                     // Remove if starting from this machine
                     if (c.fromOriginal.machineId === finalId) return false;
@@ -352,18 +396,28 @@ export const useGameStore = create<GameState>((set, get) => ({
 
                     return true;
                 })
-                : state.connections,
-            movingMachineBackup: null, // Clear backup on successful placement (move completed)
-            movingMachineGrabOffset: null
-        }));
+                : state.connections;
+            const nextMachines = [...state.machines, newMachine];
+
+            return {
+                machines: deriveAutoRecipeProducts(nextMachines, nextConnections),
+                connections: nextConnections,
+                movingMachineBackup: null, // Clear backup on successful placement (move completed)
+                movingMachineGrabOffset: null
+            };
+        });
     },
 
     removeMachine: (instanceId) => {
         get().takeSnapshot();
-        set(state => ({
-            machines: state.machines.filter(m => m.id !== instanceId),
-            connections: state.connections.filter(c => c.fromOriginal.machineId !== instanceId && c.toOriginal?.machineId !== instanceId)
-        }));
+        set(state => {
+            const nextMachines = state.machines.filter(m => m.id !== instanceId);
+            const nextConnections = state.connections.filter(c => c.fromOriginal.machineId !== instanceId && c.toOriginal?.machineId !== instanceId);
+            return {
+                machines: deriveAutoRecipeProducts(nextMachines, nextConnections),
+                connections: nextConnections
+            };
+        });
     },
 
     pickupMachine: (instanceId, grabOffset) => {
@@ -444,7 +498,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             get().takeSnapshot();
         }
 
-        set({
+        set(state => ({
+            machines: deriveAutoRecipeProducts(state.machines, nextConnections),
             connections: nextConnections,
             isWiring: true,
             isWiringValid: true,
@@ -452,7 +507,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             wiringSource: { machineId: machineInstanceId, portIndex, absolutePos },
             wiringFixedPath: [absolutePos],
             wiringPreviewPath: [absolutePos] // Start point
-        });
+        }));
     },
 
     updateWiringPreview: (mouseGridPos) => {
@@ -600,15 +655,19 @@ export const useGameStore = create<GameState>((set, get) => ({
             kind: wiringKind
         };
 
-        set(state => ({
-            connections: [...state.connections, newConnection],
-            isWiring: false,
-            isWiringValid: true,
-            wiringKind: 'belt',
-            wiringSource: null,
-            wiringFixedPath: [],
-            wiringPreviewPath: []
-        }));
+        set(state => {
+            const nextConnections = [...state.connections, newConnection];
+            return {
+                machines: deriveAutoRecipeProducts(state.machines, nextConnections),
+                connections: nextConnections,
+                isWiring: false,
+                isWiringValid: true,
+                wiringKind: 'belt',
+                wiringSource: null,
+                wiringFixedPath: [],
+                wiringPreviewPath: []
+            };
+        });
     },
 
     cancelWiring: () => {
@@ -725,7 +784,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         const newConnections = connections.filter(c => !connectionsToRemove.has(c.id));
 
         set({
-            machines: newMachines,
+            machines: deriveAutoRecipeProducts(newMachines, newConnections),
             connections: newConnections,
             selectedMachineIds: [],
             selectedConnectionIds: []
@@ -739,10 +798,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     closeMaterialSelector: () => set({ materialSelectorMachineId: null }),
     setMachineMaterial: (instanceId, materialId) => {
         get().takeSnapshot();
-        set(state => ({
-            machines: state.machines.map(m => m.id === instanceId ? { ...m, selectedMaterialId: materialId } : m),
-            materialSelectorMachineId: null
-        }));
+        set(state => {
+            const manuallyUpdatedMachines = state.machines.map(m => m.id === instanceId ? { ...m, selectedMaterialId: materialId } : m);
+            return {
+                machines: deriveAutoRecipeProducts(manuallyUpdatedMachines, state.connections),
+                materialSelectorMachineId: null
+            };
+        });
     },
 
     startInsertBlueprint: (blueprint) => {

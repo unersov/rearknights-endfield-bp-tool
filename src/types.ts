@@ -24,6 +24,9 @@ export interface Item {
   isRecyclable?: boolean;
   isFinalProduct?: boolean;
   isBottle?: boolean;
+  isDynamicFilledBottle?: boolean;
+  bottleItemId?: string;
+  liquidItemId?: string;
   powerGenerationRaw?: string;
   notes?: string;
 }

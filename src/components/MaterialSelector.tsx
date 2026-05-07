@@ -1,11 +1,13 @@
 import React from 'react';
 import { useGameStore } from '../store/gameStore';
 import { getFacilityConfig } from '../config/facilities';
-import { Dialog, Grid, VStack, Box, Text, CloseButton, Flex } from '@chakra-ui/react';
+import { Dialog, Grid, VStack, Box, Text, CloseButton, Flex, Input } from '@chakra-ui/react';
 import { ItemIcon } from './ItemIcon';
+import { getRecipeOutputItemsForFacility } from '../utils/dynamicRecipes';
 
 export const MaterialSelector: React.FC = () => {
     const { materialSelectorMachineId, machines, closeMaterialSelector, setMachineMaterial } = useGameStore();
+    const [query, setQuery] = React.useState('');
 
     const machine = materialSelectorMachineId ? machines.find(m => m.id === materialSelectorMachineId) : null;
     const config = machine ? getFacilityConfig(machine.machineId) : null;
@@ -20,7 +22,17 @@ export const MaterialSelector: React.FC = () => {
 
     if (!config) return null;
 
-    const items = config.allowedItems || config.allowedMaterials || [];
+    const items = getRecipeOutputItemsForFacility(config.id);
+    const normalizedQuery = query.trim().toLowerCase();
+    const filteredItems = normalizedQuery
+        ? items.filter(item => [
+            item.id,
+            item.name,
+            item.nameEn,
+            item.bottleItemId,
+            item.liquidItemId,
+        ].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery))
+        : items;
 
     return (
         <Dialog.Root open={isOpen} onOpenChange={(e) => !e.open && closeMaterialSelector()}>
@@ -45,13 +57,25 @@ export const MaterialSelector: React.FC = () => {
                         </Dialog.Title>
                     </Dialog.Header>
                     <Dialog.Body pb={6} pt={2}>
+                        <Input
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            placeholder="搜索当前设施产物"
+                            mb="16px"
+                            borderColor="var(--gray-dark)"
+                            color="var(--gray-dark)"
+                        />
                         {items.length === 0 ? (
                             <Box py={8} textAlign="center" color="var(--gray-dark)" opacity={0.6}>
-                                <Text>此设施暂无可选物品</Text>
+                                <Text>此设施暂无可选产物</Text>
+                            </Box>
+                        ) : filteredItems.length === 0 ? (
+                            <Box py={8} textAlign="center" color="var(--gray-dark)" opacity={0.6}>
+                                <Text>未找到相关产物</Text>
                             </Box>
                         ) : (
                             <Grid templateColumns="repeat(auto-fill, minmax(80px, 1fr))" gap={4}>
-                                {items.map((material) => {
+                                {filteredItems.map((material) => {
                                     return (
                                         <VStack
                                             key={material.id}
@@ -71,7 +95,7 @@ export const MaterialSelector: React.FC = () => {
                                             borderBottom={"4px solid var(--green)"}
                                         >
                                             <Box w="48px" h="48px" display="flex" alignItems="center" justifyContent="center">
-                                                <ItemIcon item={material} size={48} />
+                                                <ItemIcon item={material} size={48} showRarityBorder />
                                             </Box>
                                             <Text fontSize="xs" textAlign="center" fontWeight="medium" wordBreak="break-word" lineHeight="1.2">
                                                 {material.name}

@@ -1,21 +1,20 @@
 import { Badge, Box, CloseButton, Dialog, Flex, Input, Text, VStack } from '@chakra-ui/react';
 import { useMemo, useState } from 'react';
-import { RECIPES } from '../config/recipes';
-import { ITEMS } from '../config/items';
 import { FACILITIES } from '../config/facilities';
 import type { RecipeItemAmount } from '../types';
 import { ItemIcon } from './ItemIcon';
+import { getAllRecipesIncludingDynamic, getItemByIdIncludingDynamic } from '../utils/dynamicRecipes';
 
 interface RecipeViewerProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-const itemsById = new Map(Object.values(ITEMS).map(item => [item.id, item]));
 const facilitiesById = new Map(FACILITIES.map(facility => [facility.id, facility]));
+const allRecipes = getAllRecipesIncludingDynamic();
 
 const getEntryText = (entry: RecipeItemAmount) => {
-    const item = entry.materialId ? itemsById.get(entry.materialId) : undefined;
+    const item = getItemByIdIncludingDynamic(entry.materialId);
     const name = entry.name || item?.name || entry.materialId || '未知物品';
     return `${entry.amount === 1 ? '' : entry.amount}${name}`;
 };
@@ -25,7 +24,7 @@ const RecipeItems = ({ entries, emptyText }: { entries: RecipeItemAmount[]; empt
         {entries.length === 0 ? (
             <Text color="var(--gray)" fontSize="sm">{emptyText}</Text>
         ) : entries.map((entry, index) => {
-            const item = entry.materialId ? itemsById.get(entry.materialId) : undefined;
+            const item = getItemByIdIncludingDynamic(entry.materialId);
             return (
                 <Flex
                     key={`${entry.materialId || entry.name}-${index}`}
@@ -37,7 +36,7 @@ const RecipeItems = ({ entries, emptyText }: { entries: RecipeItemAmount[]; empt
                     borderRadius="4px"
                     minWidth="130px"
                 >
-                    <ItemIcon item={item} label={entry.name} size={34} />
+                    <ItemIcon item={item} label={entry.name} size={34} showRarityBorder />
                     <Box minWidth="0">
                         <Text fontSize="sm" fontWeight="bold" lineHeight="1.2">{getEntryText(entry)}</Text>
                         {entry.materialId && <Text fontSize="xs" color="var(--gray)">{entry.materialId}</Text>}
@@ -53,9 +52,9 @@ export const RecipeViewer = ({ isOpen, onClose }: RecipeViewerProps) => {
     const normalizedQuery = query.trim().toLowerCase();
 
     const filteredRecipes = useMemo(() => {
-        if (!normalizedQuery) return RECIPES;
+        if (!normalizedQuery) return allRecipes;
 
-        return RECIPES.filter(recipe => {
+        return allRecipes.filter(recipe => {
             const facility = facilitiesById.get(recipe.machineId);
             const searchText = [
                 recipe.id,
@@ -63,8 +62,8 @@ export const RecipeViewer = ({ isOpen, onClose }: RecipeViewerProps) => {
                 recipe.machineId,
                 facility?.name,
                 facility?.nameEn,
-                ...recipe.inputs.flatMap(entry => [entry.materialId, entry.name, entry.materialId ? itemsById.get(entry.materialId)?.name : undefined]),
-                ...recipe.outputs.flatMap(entry => [entry.materialId, entry.name, entry.materialId ? itemsById.get(entry.materialId)?.name : undefined]),
+                ...recipe.inputs.flatMap(entry => [entry.materialId, entry.name, getItemByIdIncludingDynamic(entry.materialId)?.name]),
+                ...recipe.outputs.flatMap(entry => [entry.materialId, entry.name, getItemByIdIncludingDynamic(entry.materialId)?.name]),
             ].filter(Boolean).join(' ').toLowerCase();
 
             return searchText.includes(normalizedQuery);
