@@ -31,16 +31,18 @@ export interface Item {
 export type Material = Item;
 
 export type RecipeId = string;
-export interface RecipeItemAmount { materialId: string; amount: number; }
+export interface RecipeItemAmount { materialId?: string; name?: string; amount: number; isWildcard?: boolean; }
 export interface Recipe { id: RecipeId; name: string; machineId: string; durationSeconds: number; inputs: RecipeItemAmount[]; outputs: RecipeItemAmount[]; notes?: string; }
 
 export interface FacilityConfig { id: string; name: string; nameEn?: string; power: number; width: number; height: number; inputs: PortConfig[]; outputs: PortConfig[]; color: string; icon?: string; supplyRange?: number; category: string; rarity?: Rarity; notes?: string; allowedItems?: Item[]; allowedMaterials?: Item[]; }
 export type MachineConfig = FacilityConfig;
 export type Side = 'top' | 'right' | 'bottom' | 'left';
-export interface PortConfig { x: number; y: number; side: Side; }
+export type PortKind = 'item' | 'pipe';
+export type ConnectionKind = 'belt' | 'pipe';
+export interface PortConfig { x: number; y: number; side: Side; kind?: PortKind; }
 export type Direction = 0 | 1 | 2 | 3;
 export interface PlacedFacility { id: FacilityId; machineId: string; x: number; y: number; rotation: Direction; selectedItemId?: string; selectedMaterialId?: string; }
 export type PlacedMachine = PlacedFacility;
-export interface Connection { id: string; fromOriginal: { machineId: MachineId; portIndex: number }; toOriginal: { machineId: MachineId; portIndex: number } | null; path: Point[]; }
-export const GameMode = { BUILD: 'BUILD', WIRE: 'WIRE', BOX_SELECT: 'BOX_SELECT', MOVE_SELECTION: 'MOVE_SELECTION' } as const;
+export interface Connection { id: string; fromOriginal: { machineId: MachineId; portIndex: number }; toOriginal: { machineId: MachineId; portIndex: number } | null; path: Point[]; kind?: ConnectionKind; }
+export const GameMode = { BUILD: 'BUILD', WIRE: 'WIRE', PIPE: 'PIPE', BOX_SELECT: 'BOX_SELECT', MOVE_SELECTION: 'MOVE_SELECTION' } as const;
 export type GameMode = typeof GameMode[keyof typeof GameMode];

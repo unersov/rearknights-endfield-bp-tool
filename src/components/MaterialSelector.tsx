@@ -2,6 +2,7 @@ import React from 'react';
 import { useGameStore } from '../store/gameStore';
 import { getFacilityConfig } from '../config/facilities';
 import { Dialog, Grid, VStack, Box, Text, CloseButton, Flex } from '@chakra-ui/react';
+import { ItemIcon } from './ItemIcon';
 
 export const MaterialSelector: React.FC = () => {
     const { materialSelectorMachineId, machines, closeMaterialSelector, setMachineMaterial } = useGameStore();
@@ -37,7 +38,7 @@ export const MaterialSelector: React.FC = () => {
                                         {config.name}
                                     </Text>
                                     <Text color={"var(--gray-dark)"} fontSize={"sm"} fontWeight={"bold"} ml={2}>
-                                        請選擇圖標
+                                        请选择物品
                                     </Text>
                                 </Flex>
                             </Box>
@@ -46,12 +47,11 @@ export const MaterialSelector: React.FC = () => {
                     <Dialog.Body pb={6} pt={2}>
                         {items.length === 0 ? (
                             <Box py={8} textAlign="center" color="var(--gray-dark)" opacity={0.6}>
-                                <Text>此機器無可選圖標</Text>
+                                <Text>此设施暂无可选物品</Text>
                             </Box>
                         ) : (
                             <Grid templateColumns="repeat(auto-fill, minmax(80px, 1fr))" gap={4}>
                                 {items.map((material) => {
-                                    const imagePath = new URL(`../assets/items/item_${material.icon}.webp`, import.meta.url).href;
                                     return (
                                         <VStack
                                             key={material.id}
@@ -71,11 +71,7 @@ export const MaterialSelector: React.FC = () => {
                                             borderBottom={"4px solid var(--green)"}
                                         >
                                             <Box w="48px" h="48px" display="flex" alignItems="center" justifyContent="center">
-                                                <img
-                                                    src={imagePath}
-                                                    alt={material.name}
-                                                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                                                />
+                                                <ItemIcon item={material} size={48} />
                                             </Box>
                                             <Text fontSize="xs" textAlign="center" fontWeight="medium" wordBreak="break-word" lineHeight="1.2">
                                                 {material.name}

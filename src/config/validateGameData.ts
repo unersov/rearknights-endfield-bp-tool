@@ -63,13 +63,15 @@ export const validateGameData = (): ValidationResult => {
     if (!facilityIdSet.has(recipe.machineId)) errors.push(`[Recipe:${recipe.id}] Unknown facility id: ${recipe.machineId}`);
     if (!(recipe.durationSeconds > 0)) errors.push(`[Recipe:${recipe.id}] durationSeconds must be > 0`);
     if (recipe.inputs.length === 0) errors.push(`[Recipe:${recipe.id}] inputs must have at least 1 item`);
-    if (recipe.outputs.length === 0) errors.push(`[Recipe:${recipe.id}] outputs must have at least 1 item`);
+    if (recipe.outputs.length === 0) warnings.push(`[Recipe:${recipe.id}] outputs are empty`);
     recipe.inputs.forEach((item, idx) => {
-      if (!itemIdSet.has(item.materialId)) errors.push(`[Recipe:${recipe.id}] input #${idx} unknown item id: ${item.materialId}`);
+      if (item.materialId && !itemIdSet.has(item.materialId)) errors.push(`[Recipe:${recipe.id}] input #${idx} unknown item id: ${item.materialId}`);
+      if (!item.materialId && !item.name) errors.push(`[Recipe:${recipe.id}] input #${idx} missing item name`);
       if (!(item.amount > 0)) errors.push(`[Recipe:${recipe.id}] input #${idx} amount must be > 0`);
     });
     recipe.outputs.forEach((item, idx) => {
-      if (!itemIdSet.has(item.materialId)) errors.push(`[Recipe:${recipe.id}] output #${idx} unknown item id: ${item.materialId}`);
+      if (item.materialId && !itemIdSet.has(item.materialId)) errors.push(`[Recipe:${recipe.id}] output #${idx} unknown item id: ${item.materialId}`);
+      if (!item.materialId && !item.name) errors.push(`[Recipe:${recipe.id}] output #${idx} missing item name`);
       if (!(item.amount > 0)) errors.push(`[Recipe:${recipe.id}] output #${idx} amount must be > 0`);
     });
   });

@@ -1,4 +1,4 @@
-import { createListCollection, Select } from '@chakra-ui/react';
+import { Button, createListCollection, Select } from '@chakra-ui/react';
 import { ChevronDown } from 'lucide-react';
 import './Header.scss';
 import logoIcon from '../assets/logo.png';
@@ -14,17 +14,19 @@ interface HeaderProps {
 }
 
 import { ShareModal } from './ShareModal';
+import { RecipeViewer } from './RecipeViewer';
 import { useState } from 'react';
 
 export const Header = ({ onSave, onOpen }: HeaderProps) => {
     const { gridWidth, gridHeight, setGridSize, setUiView } = useGameStore();
     const [isShareOpen, setIsShareOpen] = useState(false);
+    const [isRecipeOpen, setIsRecipeOpen] = useState(false);
 
     const gridPresetsCollection = createListCollection({
         items: GRID_PRESETS.map(p => ({ label: p.label, value: `${p.width}x${p.height}` })),
     });
 
-    const handleValueChange = (e: any) => {
+    const handleValueChange = (e: { value: string[] }) => {
         const val = e.value[0];
         if (!val) return;
         const [w, h] = val.split('x').map(Number);
@@ -46,7 +48,7 @@ export const Header = ({ onSave, onOpen }: HeaderProps) => {
                         width="240px"
                     >
                         <Select.Trigger>
-                            <Select.ValueText placeholder="選擇藍圖尺寸" />
+                            <Select.ValueText placeholder="选择蓝图尺寸" />
                             <Select.Indicator>
                                 <ChevronDown size={16} color="white" />
                             </Select.Indicator>
@@ -63,14 +65,16 @@ export const Header = ({ onSave, onOpen }: HeaderProps) => {
                     </Select.Root>
                 </div>
                 <div className="actions">
+                    <Button className="recipe-button" onClick={() => setIsRecipeOpen(true)}>查看配方</Button>
                     <IconButton icon="material-symbols:save" tooltip="保存" onClick={onSave} />
-                    <IconButton icon="typcn:home" tooltip="藍圖列表" onClick={onOpen} />
+                    <IconButton icon="typcn:home" tooltip="蓝图列表" onClick={onOpen} />
                     <IconButton icon="material-symbols:share" tooltip="分享" onClick={() => setIsShareOpen(true)} />
-                    <IconButton icon="material-symbols:settings" tooltip="設定" onClick={() => setUiView('settings')} />
-                    <IconButton icon="material-symbols:info-i-rounded" tooltip="關於" onClick={() => setUiView('about')} />
+                    <IconButton icon="material-symbols:settings" tooltip="设置" onClick={() => setUiView('settings')} />
+                    <IconButton icon="material-symbols:info-i-rounded" tooltip="关于" onClick={() => setUiView('about')} />
                 </div>
             </div>
             <ShareModal isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />
+            <RecipeViewer isOpen={isRecipeOpen} onClose={() => setIsRecipeOpen(false)} />
         </>
     );
 };

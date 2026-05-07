@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type Language = 'zh-TW' | 'zh-CN';
+export type Language = 'zh-CN';
 
 interface SettingsState {
     language: Language;
@@ -11,7 +11,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
     persist(
         (set) => ({
-            language: 'zh-TW',
+            language: 'zh-CN',
             setLanguage: (lang) => set({ language: lang }),
         }),
         {

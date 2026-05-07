@@ -3,18 +3,19 @@ import { useGameStore } from '../store/gameStore';
 import { FACILITIES } from '../config/facilities';
 import { GameMode } from '../types';
 import classNames from 'classnames';
-import { MousePointer2, Zap, BoxSelect } from 'lucide-react';
+import { BoxSelect, Droplets, MousePointer2, Zap } from 'lucide-react';
 import { Tabs } from '@chakra-ui/react';
 import './Toolbar.scss';
+import { getRarityColor } from '../utils/rarity';
 
 const TABS = [
     { id: 'core', label: '核心' },
     { id: 'resourcing', label: '资源开采' },
-    { id: 'logistics', label: '物流' },
-    { id: 'storage', label: '倉儲存取' },
-    { id: 'production', label: '基礎生產' },
-    { id: 'processing', label: '合成製造' },
-    { id: 'power', label: '電力' },
+    { id: 'logistics', label: '物流设备' },
+    { id: 'storage', label: '仓库存取' },
+    { id: 'production', label: '基础生产' },
+    { id: 'processing', label: '合成制造' },
+    { id: 'power', label: '电力供应' },
 ];
 
 export const Toolbar = () => {
@@ -62,21 +63,28 @@ export const Toolbar = () => {
                     <button
                         className={classNames('tool-btn', { active: mode === GameMode.BUILD && !selectedMachineId })}
                         onClick={() => selectMachine(null)}
-                        title="Select / Move"
+                        title="选择/移动"
                     >
                         <MousePointer2 size={24} />
                     </button>
                     <button
                         className={classNames('tool-btn', { active: mode === GameMode.WIRE })}
                         onClick={() => setMode(mode === GameMode.WIRE ? GameMode.BUILD : GameMode.WIRE)}
-                        title="Wiring Mode (E)"
+                        title="传送带连接模式 (E)"
                     >
                         <Zap size={24} />
                     </button>
                     <button
+                        className={classNames('tool-btn', { active: mode === GameMode.PIPE })}
+                        onClick={() => setMode(mode === GameMode.PIPE ? GameMode.BUILD : GameMode.PIPE)}
+                        title="管道连接模式 (Q)"
+                    >
+                        <Droplets size={24} />
+                    </button>
+                    <button
                         className={classNames('tool-btn', { active: mode === GameMode.BOX_SELECT })}
                         onClick={() => setMode(mode === GameMode.BOX_SELECT ? GameMode.BUILD : GameMode.BOX_SELECT)}
-                        title="Box Selection Mode (X)"
+                        title="框选模式 (X)"
                     >
                         <BoxSelect size={24} />
                     </button>
@@ -94,8 +102,9 @@ export const Toolbar = () => {
                             >
                                 <img
                                     className="icon"
-                                    src={new URL(`../assets/machines/${m.icon || m.id}.webp`, import.meta.url).href}
+                                    src={new URL(`../assets/facilities/${m.id}.webp`, import.meta.url).href}
                                     alt={m.name}
+                                    style={{ borderBottomColor: getRarityColor(m.rarity) }}
                                 />
                                 <span>{m.name}</span>
                             </button>

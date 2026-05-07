@@ -1,4 +1,11 @@
 .machine-container {
+    --item-port-outer: #c4c1c1;
+    --item-port-inner: var(--gray-light);
+    --item-port-icon: var(--gray);
+    --pipe-port-outer: #75d2ff;
+    --pipe-port-inner: #d8f4ff;
+    --pipe-port-icon: #2470a0;
+
     user-select: none;
     -webkit-user-select: none;
     position: absolute;
@@ -27,6 +34,19 @@
     justify-content: center;
     box-shadow: none;
     box-sizing: border-box;
+
+    .facility-image {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(72%, 96px);
+        height: min(72%, 96px);
+        transform: translate(-50%, -50%);
+        object-fit: contain;
+        pointer-events: none;
+        z-index: 2;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+    }
 
     .machine-label {
         position: absolute;
@@ -76,7 +96,7 @@
     width: 20px;
     height: 28px;
     /* Default square */
-    background-color: #c4c1c1;
+    background-color: var(--item-port-outer);
     /* Outer layer bg */
     border: 1.5px solid var(--gray-dark);
     /* Outer border #5f5d5d */
@@ -89,6 +109,7 @@
 
     /* Reset text styles on outer */
     font-size: 0;
+    z-index: 20;
 }
 
 /* Align inner based on side/direction */
@@ -119,7 +140,7 @@
 .port-inner {
     width: 100%;
     height: 100%;
-    background-color: var(--gray-light);
+    background-color: var(--item-port-inner);
     /* Inner layer bg */
     display: flex;
     align-items: center;
@@ -137,8 +158,21 @@
 .port.output .port-inner svg {
     width: 100%;
     height: 100%;
-    color: var(--gray);
+    color: var(--item-port-icon);
     display: block;
+}
+
+.port.pipe-port {
+    background-color: var(--pipe-port-outer);
+    border-color: var(--pipe-port-icon);
+
+    .port-inner {
+        background-color: var(--pipe-port-inner);
+    }
+
+    .port-inner svg {
+        color: var(--pipe-port-icon);
+    }
 }
 
 /* COMPACT MODE OVERRIDES */
@@ -288,10 +322,24 @@
     }
 }
 
+.port.pipe-port.output.clickable:hover {
+    .port-inner {
+        background: #b7ecff;
+    }
+}
+
 .port.output.active {
     border-color: var(--yellow-light);
 
     .port-inner {
         background: var(--yellow-light);
+    }
+}
+
+.port.pipe-port.output.active {
+    border-color: var(--pipe-port-icon);
+
+    .port-inner {
+        background: var(--pipe-port-outer);
     }
 }

@@ -2,11 +2,13 @@ import React from 'react';
 import { Icon } from '@iconify/react';
 import classNames from 'classnames';
 import { GameMode } from '../types';
-import type { PlacedMachine } from '../types';
+import type { ConnectionKind, Item, PlacedMachine, PortConfig } from '../types';
 import { getFacilityConfig } from '../config/facilities';
 import { useGameStore } from '../store/gameStore';
 import './Machine.scss';
 import { getRotatedDimensions, getRotatedPorts, isMachinePowered } from '../utils/machineUtils';
+import { getRarityColor } from '../utils/rarity';
+import { ItemIcon } from './ItemIcon';
 
 interface MachineProps {
     data: PlacedMachine;
@@ -24,7 +26,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
     const inputs = getRotatedPorts(config.inputs, config.width, config.height, data.rotation);
     const outputs = getRotatedPorts(config.outputs, config.width, config.height, data.rotation);
 
-    // 檢查機器是否為「窄型」 (至少一個維度為 1)
+    // 检查设施是否为“窄型” (至少一个维度为 1)
     const isNarrowMachine = config.width === 1 || config.height === 1;
 
     const style = {
@@ -34,7 +36,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         '--h': height,
     } as React.CSSProperties;
 
-    // 處理材料選擇的點擊事件
+    // 处理材料选择的点击事件
     const handleClick = (e: React.MouseEvent) => {
         if (mode === GameMode.BUILD) {
             e.stopPropagation();
@@ -46,8 +48,16 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         // 僅允許在建造模式下拾取...
         if (e.button !== 0) return; // 僅左鍵點擊
 
+        const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+        const localX = ((e.clientX - rect.left) / rect.width) * width;
+        const localY = ((e.clientY - rect.top) / rect.height) * height;
+        const grabOffset = {
+            x: Math.min(width - 0.5, Math.max(0.5, Math.floor(localX) + 0.5)),
+            y: Math.min(height - 0.5, Math.max(0.5, Math.floor(localY) + 0.5)),
+        };
+
         pressTimer.current = setTimeout(() => {
-            pickupMachine(data.id);
+            pickupMachine(data.id, grabOffset);
         }, 500);
     };
 
@@ -67,14 +77,17 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
 
     // ... getPortStyle ...
 
-    const handleInputClick = (e: React.MouseEvent) => {
+    const getConnectionKind = (port: PortConfig): ConnectionKind => port.kind === 'pipe' ? 'pipe' : 'belt';
+    const modeForKind = (kind: ConnectionKind) => kind === 'pipe' ? GameMode.PIPE : GameMode.WIRE;
+
+    const handleInputClick = (e: React.MouseEvent, port: PortConfig) => {
         e.stopPropagation();
-        if (mode === GameMode.WIRE && isWiring) {
+        if (isWiring && mode === modeForKind(getConnectionKind(port))) {
             commitWiring();
         }
     };
 
-    const getPortStyle = (p: { x: number, y: number, side: 'top' | 'right' | 'bottom' | 'left' }) => {
+    const getPortStyle = (p: PortConfig) => {
         const style: React.CSSProperties = {};
 
         const CELL_SIZE = 40;
@@ -85,7 +98,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         // Port along-edge size (width for Top/Bottom, height for Left/Right) = 16px
         // Port depth (height for Top/Bottom, width for Left/Right) = 10px
 
-        // 相對於機器主體 (內部 padding) 的中心位置
+        // 相对于设施主体 (内部 padding) 的中心位置
         const centerOffset = (CELL_SIZE / 2) - GAP;
 
         // 恢復使用者要求的手動偏移量 -4px
@@ -123,10 +136,10 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
     };
 
     // 碰撞檢測輔助函數
-    const getPortClasses = (currentPort: { x: number, y: number, side: string }) => {
-        const classes: string[] = ['port', currentPort.side];
+    const getPortClasses = (currentPort: PortConfig) => {
+        const classes: string[] = ['port', currentPort.side, currentPort.kind === 'pipe' ? 'pipe-port' : 'item-port'];
 
-        // 僅對窄型/小型機器應用智慧調整大小
+        // 仅对窄型/小型设施应用智能调整大小
         if (!isNarrowMachine) return classNames(classes);
 
         // 尋找同一個格子內的其他端口
@@ -157,23 +170,24 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         return classNames(classes);
     };
 
-    const handleOutputClick = (e: React.MouseEvent, portIndex: number, portRel: { x: number, y: number }) => {
+    const handleOutputClick = (e: React.MouseEvent, portIndex: number, portRel: PortConfig) => {
         e.stopPropagation();
-        if (mode === GameMode.WIRE) {
+        const kind = getConnectionKind(portRel);
+        if (mode === modeForKind(kind)) {
             // 計算端口的絕對網格座標
             const absX = data.x + portRel.x;
             const absY = data.y + portRel.y;
-            startWiring(data.id, portIndex, { x: absX, y: absY });
+            startWiring(data.id, portIndex, { x: absX, y: absY }, kind);
         }
     };
 
     // 尋找選中的材料圖標
-    let selectedMaterialIcon: number | null = null;
+    let selectedMaterial: Item | null = null;
     const allowedItems = config.allowedItems || config.allowedMaterials || [];
     if (data.selectedMaterialId) {
         const mat = allowedItems.find(m => m.id === data.selectedMaterialId);
         if (mat) {
-            selectedMaterialIcon = mat.icon;
+            selectedMaterial = mat;
         }
     }
 
@@ -182,23 +196,33 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
             className={classNames('machine-container', {
                 selected: isSelected,
             })}
-            style={style}
+            style={{
+                ...style,
+                '--rarity-color': getRarityColor(config.rarity),
+            } as React.CSSProperties}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
             onClick={handleClick}
         >
             <div className="machine-body">
+                <img
+                    className="facility-image"
+                    src={new URL(`../assets/facilities/${config.id}.webp`, import.meta.url).href}
+                    alt={config.name}
+                    style={{ borderBottom: getRarityColor(config.rarity) ? `3px solid ${getRarityColor(config.rarity)}` : undefined }}
+                />
+
                 <div
                     className="machine-label"
                     style={{
                         transform: `scale(${1 / zoom})`,
-                        transformOrigin: 'top left' // 因為我們將其定位在機器的右下角，標籤的錨點為「左上」
+                        transformOrigin: 'top left' // 因为我们将其定位在设施的右下角，标签的锚点为“左上”
                     }}
                 >
                     <div>{config.name}</div>
-                    <div>[點按] 查看詳情/選擇物品</div>
-                    <div>[長按] 移動</div>
+                    <div>[点按] 查看详情/选择物品</div>
+                    <div>[长按] 移动</div>
                 </div>
 
                 {(!isMachinePowered(data, machines, getFacilityConfig)) && (
@@ -214,7 +238,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                             alignItems: 'center',
                             justifyContent: 'center'
                         }}
-                        title="No Power"
+                        title="缺电"
                     >
                         <Icon
                             icon="uil:battery-bolt"
@@ -227,7 +251,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                 )}
 
                 {/* 選中的材料圖標 */}
-                {selectedMaterialIcon !== null && (
+                {selectedMaterial !== null && (
                     <div
                         className="selected-material-icon"
                         style={{
@@ -244,54 +268,53 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                             justifyContent: 'center'
                         }}
                     >
-                        <img
-                            src={new URL(`../assets/items/item_${selectedMaterialIcon}.webp`, import.meta.url).href}
-                            alt="Selected Material"
-                            style={{
-                                maxWidth: '100%',
-                                maxHeight: '100%',
-                                objectFit: 'contain',
-                                filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))'
-                            }}
-                        />
+                        <ItemIcon item={selectedMaterial} size={40} />
                     </div>
                 )}
 
 
                 {/* 輸入 */}
-                {inputs.map((p, i) => (
-                    <div
-                        key={`in-${i}`}
-                        className={classNames(getPortClasses(p), 'input', {
-                            clickable: mode === GameMode.WIRE && isWiring
-                        })}
-                        style={getPortStyle(p)}
-                        onClick={handleInputClick}
-                        title={mode === GameMode.WIRE && isWiring ? "Click to connect" : ""}
-                    >
-                        <div className="port-inner">
-                            <Icon icon="octicon:chevron-right-12" width="24" height="24" strokeWidth="3" />
+                {inputs.map((p, i) => {
+                    const isConnectable = isWiring && mode === modeForKind(getConnectionKind(p));
+
+                    return (
+                        <div
+                            key={`in-${i}`}
+                            className={classNames(getPortClasses(p), 'input', {
+                                clickable: isConnectable
+                            })}
+                            style={getPortStyle(p)}
+                            onClick={(e) => handleInputClick(e, p)}
+                            title={isConnectable ? "点击连接" : ""}
+                        >
+                            <div className="port-inner">
+                                <Icon icon="octicon:chevron-right-12" width="24" height="24" strokeWidth="3" />
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
 
                 {/* 輸出 */}
-                {outputs.map((p, i) => (
-                    <div
-                        key={`out-${i}`}
-                        className={classNames(getPortClasses(p), 'output', {
-                            clickable: mode === GameMode.WIRE,
-                            active: wiringSource?.machineId === data.id && wiringSource.portIndex === i
-                        })}
-                        style={getPortStyle(p)}
-                        onClick={(e) => handleOutputClick(e, i, p)}
-                        title={mode === GameMode.WIRE ? "Click to start wiring" : ""}
-                    >
-                        <div className="port-inner">
-                            <Icon icon="octicon:chevron-right-12" width="24" height="24" strokeWidth="3" />
+                {outputs.map((p, i) => {
+                    const isConnectable = mode === modeForKind(getConnectionKind(p));
+
+                    return (
+                        <div
+                            key={`out-${i}`}
+                            className={classNames(getPortClasses(p), 'output', {
+                                clickable: isConnectable,
+                                active: wiringSource?.machineId === data.id && wiringSource.portIndex === i
+                            })}
+                            style={getPortStyle(p)}
+                            onClick={(e) => handleOutputClick(e, i, p)}
+                            title={isConnectable ? "点击开始连接" : ""}
+                        >
+                            <div className="port-inner">
+                                <Icon icon="octicon:chevron-right-12" width="24" height="24" strokeWidth="3" />
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

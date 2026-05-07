@@ -1,4 +1,9 @@
 .grid-container {
+    --power-range-fill: rgba(255, 204, 0, 0.18);
+    --power-range-border: #ffcc00;
+    --pipe-line-outline: rgba(36, 112, 160, 0.35);
+    --pipe-line-fill: rgba(117, 210, 255, 0.55);
+
     width: 100%;
     height: 100%;
     position: relative;
@@ -9,6 +14,10 @@
     &.wiring-mode {
         cursor: alias;
         /* or something indicating wiring */
+    }
+
+    &.panning {
+        cursor: grabbing;
     }
 }
 
@@ -67,11 +76,21 @@
     stroke-width: 20;
 }
 
+.conveyor-line-outline.pipe {
+    stroke: var(--pipe-line-outline);
+    stroke-width: 10;
+}
+
 .conveyor-preview-outline {
     stroke: var(--gray);
     stroke-width: 16;
     stroke-dasharray: 10 10;
     opacity: 0.6;
+}
+
+.conveyor-preview-outline.pipe {
+    stroke: var(--pipe-line-outline);
+    stroke-width: 8;
 }
 
 /* FILL / BODY (Top Layer) */
@@ -80,11 +99,38 @@
     stroke-width: 16;
 }
 
+.conveyor-line-fill.pipe {
+    stroke: var(--pipe-line-fill);
+    stroke-width: 6;
+}
+
+.connection-arrow {
+    fill: none;
+    stroke: var(--black-light);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+.connection-arrow.belt {
+    stroke: rgba(45, 45, 45, 0.8);
+}
+
+.connection-arrow.pipe {
+    stroke: #2470a0;
+}
+
 .conveyor-preview-fill {
     stroke: var(--yellow-light);
     stroke-width: 10;
     stroke-dasharray: 10 10;
     animation: dash 1s linear infinite;
+}
+
+.conveyor-preview-fill.pipe {
+    stroke: var(--pipe-line-fill);
+    stroke-width: 4;
 }
 
 @keyframes dash {
@@ -164,4 +210,16 @@
     stroke-width: 26;
     /* Wider than normal 20 */
     opacity: 0.8;
+}
+
+.conveyor-line-outline.pipe.selected {
+    stroke-width: 14;
+}
+
+.power-range-preview {
+    position: absolute;
+    border: 2px solid var(--power-range-border);
+    background: var(--power-range-fill);
+    pointer-events: none;
+    z-index: 5;
 }

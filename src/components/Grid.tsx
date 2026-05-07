@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { Machine } from './Machine';
 import { GameMode } from '../types';
-import type { Point } from '../types';
+import type { Connection, ConnectionKind, Point, PortConfig } from '../types';
 import { FACILITIES } from '../config/facilities';
 import classNames from 'classnames';
 import './Grid.scss';
@@ -19,6 +19,7 @@ export const Grid = () => {
         selectedMachineId,
         addMachine,
         isWiring,
+        wiringKind,
         updateWiringPreview,
         wiringPreviewPath,
         isWiringValid,
@@ -46,6 +47,7 @@ export const Grid = () => {
         deleteSelected,
 
         moveAnchor,
+        movingMachineGrabOffset,
         movingMachinesSnapshot,
         movingConnectionsSnapshot,
         cancelOperation
@@ -54,6 +56,7 @@ export const Grid = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [isPanning, setIsPanning] = React.useState(false);
     const lastMousePos = useRef<Point>({ x: 0, y: 0 });
+    const didPanRef = useRef(false);
 
     // 快捷鍵 E 和 R
     const setMode = useGameStore(s => s.setMode);
@@ -64,6 +67,9 @@ export const Grid = () => {
             if (e.key.toLowerCase() === 'e') {
                 if (isPlacing) return;
                 setMode(mode === GameMode.WIRE ? GameMode.BUILD : GameMode.WIRE);
+            } else if (e.key.toLowerCase() === 'q') {
+                if (isPlacing) return;
+                setMode(mode === GameMode.PIPE ? GameMode.BUILD : GameMode.PIPE);
             } else if (e.key.toLowerCase() === 'r') {
                 rotatePreview();
             } else if (e.key.toLowerCase() === 'x') {
@@ -71,7 +77,7 @@ export const Grid = () => {
                 setMode(mode === GameMode.BOX_SELECT ? GameMode.BUILD : GameMode.BOX_SELECT);
             } else if (e.key.toLowerCase() === 'f') {
                 deleteSelected();
-                // 使用者需求：按 F1 開啟藍圖列表
+                // 用户需求：按 F1 打开蓝图列表
                 // 注意：F1 通常會開啟說明，我們可能需要阻止預設行為
             } else if (e.key === 'F1') {
                 e.preventDefault();
@@ -79,7 +85,7 @@ export const Grid = () => {
                 useGameStore.getState().setUiView('list');
             } else if (e.key.toLowerCase() === 'm') {
                 // 我們需要 hoverPos 作為錨點。由於無法在此監聽器中輕鬆存取 react state...
-                // 實際上，如果我們使用 ref 來儲存 hoverPos，是可以運作的。
+                // 实际上，如果我们使用 ref 来储存 hoverPos，是可以运作的。
                 if (hoverPosRef.current) {
                     startBatchMove(hoverPosRef.current);
                 }
@@ -115,11 +121,21 @@ export const Grid = () => {
         if (e.button === 1) {
             e.preventDefault();
             setIsPanning(true);
+            didPanRef.current = false;
             lastMousePos.current = { x: e.clientX, y: e.clientY };
             return;
         }
 
         const pos = getGridPos(e);
+        const target = e.target as HTMLElement;
+        const isBlankArea = !target.closest('.machine-container') && !target.closest('button') && !target.closest('[role="button"]');
+
+        if (e.button === 0 && mode === GameMode.BUILD && !selectedMachineId && isBlankArea) {
+            setIsPanning(true);
+            didPanRef.current = false;
+            lastMousePos.current = { x: e.clientX, y: e.clientY };
+            return;
+        }
 
         if (mode === GameMode.BOX_SELECT && e.button === 0) {
             setBoxSelection(pos, pos);
@@ -164,10 +180,39 @@ export const Grid = () => {
 
     const [hoverPos, setHoverPos] = React.useState<Point | null>(null);
 
+    const getSingleMovePlacementPos = (pos: Point): Point => {
+        if (!movingMachineGrabOffset) return pos;
+        return {
+            x: Math.round(pos.x - movingMachineGrabOffset.x),
+            y: Math.round(pos.y - movingMachineGrabOffset.y),
+        };
+    };
+
+    const getConnectionKind = (conn: Connection): ConnectionKind => conn.kind || 'belt';
+
+    const getArrowRotation = (from: Point, to: Point) => {
+        if (to.x > from.x) return 0;
+        if (to.x < from.x) return 180;
+        if (to.y > from.y) return 90;
+        return 270;
+    };
+
+    const getConnectionArrows = (path: Point[]) => path.flatMap((point, index) => {
+        const next = path[index + 1];
+        const prev = path[index - 1];
+        const target = next || prev;
+        if (!target) return [];
+        const rotation = next ? getArrowRotation(point, target) : getArrowRotation(target, point);
+        return [{ point, rotation }];
+    });
+
     const handleMouseMove = (e: React.MouseEvent) => {
         if (isPanning) {
             const deltaX = e.clientX - lastMousePos.current.x;
             const deltaY = e.clientY - lastMousePos.current.y;
+            if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+                didPanRef.current = true;
+            }
 
             setPan({
                 x: pan.x + deltaX,
@@ -192,20 +237,23 @@ export const Grid = () => {
     };
 
     const handleClick = (e: React.MouseEvent) => {
-        if (isPanning) return; // 如果正在平移則阻止點擊 (雖然 mouseUp 會清除它，但在邏輯上可能需要嚴謹一些)
+        if (isPanning || didPanRef.current) {
+            didPanRef.current = false;
+            return;
+        }
         // 檢查是否實際拖曳過？目前做簡單檢查。
 
         const pos = getGridPos(e);
 
         if (mode === GameMode.BUILD && selectedMachineId) {
             addMachine(selectedMachineId, pos.x, pos.y, previewRotation);
-            // 如果未按住 Ctrl，取消選擇機器
+            // 如果未按住 Ctrl，取消选择设施
             if (!e.ctrlKey) {
                 useGameStore.getState().selectMachine(null);
             }
-        } else if (mode === GameMode.WIRE && isWiring) {
-            // 檢查是否點擊了機器輸入/輸出，這由 Port onClick 處理。
-            // 如果執行到這裡，表示我們點擊了網格背景 (或沒有點擊到端口的機器本體)。
+        } else if ((mode === GameMode.WIRE || mode === GameMode.PIPE) && isWiring) {
+            // 检查是否点击了设施输入/输出，这由 Port onClick 处理。
+            // 如果执行到这里，表示我们点击了网格背景 (或没有点击到端口的设施本体)。
             useGameStore.getState().addWiringAnchor(pos);
         } else if (mode === GameMode.MOVE_SELECTION) {
             commitBatchMove(pos);
@@ -219,21 +267,23 @@ export const Grid = () => {
         useGameStore.getState().cancelOperation();
     };
 
-    // 預覽機器計算
+    // 预览设施计算
     const ghostConfig = (mode === GameMode.BUILD && selectedMachineId) ? FACILITIES.find(m => m.id === selectedMachineId) : null;
     let isGhostInvalid = false;
     let ghostWidth = 0;
     let ghostHeight = 0;
-    let ghostPorts: any[] = [];
+    let ghostPorts: (PortConfig & { isInput: boolean })[] = [];
+    let ghostPos: Point | null = null;
 
     if (ghostConfig && hoverPos) {
+        ghostPos = getSingleMovePlacementPos(hoverPos);
         const dims = getRotatedDimensions(ghostConfig.width, ghostConfig.height, previewRotation);
         ghostWidth = dims.width;
         ghostHeight = dims.height;
 
         const candidate = {
-            x: hoverPos.x,
-            y: hoverPos.y,
+            x: ghostPos.x,
+            y: ghostPos.y,
             width: ghostWidth,
             height: ghostHeight
         };
@@ -257,7 +307,7 @@ export const Grid = () => {
 
     return (
         <div
-            className={classNames('grid-container', { 'wiring-mode': mode === GameMode.WIRE, 'panning': isPanning })}
+            className={classNames('grid-container', { 'wiring-mode': mode === GameMode.WIRE || mode === GameMode.PIPE, 'pipe-mode': mode === GameMode.PIPE, 'panning': isPanning })}
             ref={containerRef}
             onMouseMove={handleMouseMove}
             onMouseDown={handleMouseDown}
@@ -293,50 +343,75 @@ export const Grid = () => {
                         pointerEvents: 'none', // Ensure clicks pass through to grid
                     }}
                 >
-                    {/* 已確認連線 - 外框 */}
-                    {connections.map(conn => (
-                        <polyline
-                            key={`${conn.id}-outline`}
-                            points={conn.path.map(p => `${p.x * GRID_SIZE + GRID_SIZE / 2},${p.y * GRID_SIZE + GRID_SIZE / 2}`).join(' ')}
-                            className={classNames('conveyor-line-outline', { selected: selectedConnectionIds.includes(conn.id) })}
-                        />
+                    {/* 已确认连接 - 外框 */}
+                    {(['belt', 'pipe'] as ConnectionKind[]).map(kind => (
+                        <g key={`connections-${kind}`} className={`${kind}-connections`}>
+                            {connections.filter(conn => getConnectionKind(conn) === kind).map(conn => {
+                                const points = conn.path.map(p => `${p.x * GRID_SIZE + GRID_SIZE / 2},${p.y * GRID_SIZE + GRID_SIZE / 2}`).join(' ');
+
+                                return (
+                                    <React.Fragment key={conn.id}>
+                                        <polyline
+                                            points={points}
+                                            className={classNames('conveyor-line-outline', kind, { selected: selectedConnectionIds.includes(conn.id) })}
+                                        />
+                                        <polyline
+                                            points={points}
+                                            className={classNames('conveyor-line-fill', kind, { selected: selectedConnectionIds.includes(conn.id) })}
+                                        />
+                                        {getConnectionArrows(conn.path).map(({ point, rotation }, index) => (
+                                            <g
+                                                key={`${conn.id}-arrow-${index}`}
+                                                className={classNames('connection-arrow', kind)}
+                                                transform={`translate(${point.x * GRID_SIZE + GRID_SIZE / 2} ${point.y * GRID_SIZE + GRID_SIZE / 2}) rotate(${rotation})`}
+                                            >
+                                                <path d="M -5 -6 L 5 0 L -5 6" />
+                                            </g>
+                                        ))}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </g>
                     ))}
-                    {/* 已確認連線 - 內填 */}
-                    {connections.map(conn => (
-                        <polyline
-                            key={`${conn.id}-fill`}
-                            points={conn.path.map(p => `${p.x * GRID_SIZE + GRID_SIZE / 2},${p.y * GRID_SIZE + GRID_SIZE / 2}`).join(' ')}
-                            className={classNames('conveyor-line-fill', { selected: selectedConnectionIds.includes(conn.id) })}
-                        />
-                    ))}
+                    {/* 已确认连接 - 内填 */}
 
                     {/* 連線預覽 - 外框 */}
                     {isWiring && wiringPreviewPath.length > 0 && (
                         <polyline
                             points={wiringPreviewPath.map(p => `${p.x * GRID_SIZE + GRID_SIZE / 2},${p.y * GRID_SIZE + GRID_SIZE / 2}`).join(' ')}
-                            className={classNames('conveyor-preview-outline', { 'invalid': !isWiringValid })}
+                            className={classNames('conveyor-preview-outline', wiringKind, { 'invalid': !isWiringValid })}
                         />
                     )}
                     {/* 連線預覽 - 內填 */}
                     {isWiring && wiringPreviewPath.length > 0 && (
                         <polyline
                             points={wiringPreviewPath.map(p => `${p.x * GRID_SIZE + GRID_SIZE / 2},${p.y * GRID_SIZE + GRID_SIZE / 2}`).join(' ')}
-                            className={classNames('conveyor-preview-fill', { 'invalid': !isWiringValid })}
+                            className={classNames('conveyor-preview-fill', wiringKind, { 'invalid': !isWiringValid })}
                         />
                     )}
 
                     {/* 預覽終點標記 */}
+                    {isWiring && wiringPreviewPath.length > 0 && getConnectionArrows(wiringPreviewPath).map(({ point, rotation }, index) => (
+                        <g
+                            key={`preview-arrow-${index}`}
+                            className={classNames('connection-arrow', 'preview', wiringKind, { invalid: !isWiringValid })}
+                            transform={`translate(${point.x * GRID_SIZE + GRID_SIZE / 2} ${point.y * GRID_SIZE + GRID_SIZE / 2}) rotate(${rotation})`}
+                        >
+                            <path d="M -5 -6 L 5 0 L -5 6" />
+                        </g>
+                    ))}
+
                     {isWiring && wiringPreviewPath.length > 0 && (
                         <circle
                             cx={wiringPreviewPath[wiringPreviewPath.length - 1].x * GRID_SIZE + GRID_SIZE / 2}
                             cy={wiringPreviewPath[wiringPreviewPath.length - 1].y * GRID_SIZE + GRID_SIZE / 2}
                             r="4"
-                            fill="white"
+                            fill={!isWiringValid ? '#ff4444' : wiringKind === 'pipe' ? 'rgba(117, 210, 255, 0.85)' : 'white'}
                         />
                     )}
                 </svg>
 
-                {/* 機器圖層 */}
+                {/* 设施图层 */}
                 {machines.map(m => (
                     <Machine
                         key={m.id}
@@ -382,29 +457,43 @@ export const Grid = () => {
                                 zIndex: 12
                             }}
                         >
-                            {movingConnectionsSnapshot.map(conn => {
-                                const newPath = conn.path.map(p => ({ x: p.x + offsetX, y: p.y + offsetY }));
-                                const pointsStr = newPath.map(p => (`${p.x * GRID_SIZE + GRID_SIZE / 2},${p.y * GRID_SIZE + GRID_SIZE / 2}`)).join(' ');
-                                return (
-                                    <React.Fragment key={`ghost-conn-${conn.id}`}>
-                                        <polyline
-                                            points={pointsStr}
-                                            className="conveyor-line-outline"
-                                            style={{ opacity: 0.5 }}
-                                        />
-                                        <polyline
-                                            points={pointsStr}
-                                            className="conveyor-line-fill"
-                                            style={{ opacity: 0.5 }}
-                                        />
-                                    </React.Fragment>
-                                );
-                            })}
+                            {(['belt', 'pipe'] as ConnectionKind[]).map(kind => (
+                                <g key={`ghost-connections-${kind}`}>
+                                    {movingConnectionsSnapshot.filter(conn => getConnectionKind(conn) === kind).map(conn => {
+                                        const newPath = conn.path.map(p => ({ x: p.x + offsetX, y: p.y + offsetY }));
+                                        const pointsStr = newPath.map(p => (`${p.x * GRID_SIZE + GRID_SIZE / 2},${p.y * GRID_SIZE + GRID_SIZE / 2}`)).join(' ');
+                                        return (
+                                            <React.Fragment key={`ghost-conn-${conn.id}`}>
+                                                <polyline
+                                                    points={pointsStr}
+                                                    className={classNames('conveyor-line-outline', kind)}
+                                                    style={{ opacity: 0.5 }}
+                                                />
+                                                <polyline
+                                                    points={pointsStr}
+                                                    className={classNames('conveyor-line-fill', kind)}
+                                                    style={{ opacity: 0.5 }}
+                                                />
+                                                {getConnectionArrows(newPath).map(({ point, rotation }, index) => (
+                                                    <g
+                                                        key={`ghost-conn-${conn.id}-arrow-${index}`}
+                                                        className={classNames('connection-arrow', kind)}
+                                                        opacity="0.5"
+                                                        transform={`translate(${point.x * GRID_SIZE + GRID_SIZE / 2} ${point.y * GRID_SIZE + GRID_SIZE / 2}) rotate(${rotation})`}
+                                                    >
+                                                        <path d="M -5 -6 L 5 0 L -5 6" />
+                                                    </g>
+                                                ))}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </g>
+                            ))}
                         </svg>
                     )
                 })()}
 
-                {/* 批量移動預覽 - 機器 */}
+                {/* 批量移动预览 - 设施 */}
                 {mode === GameMode.MOVE_SELECTION && moveAnchor && hoverPos && movingMachinesSnapshot.map(m => {
                     const offsetX = hoverPos.x - moveAnchor.x;
                     const offsetY = hoverPos.y - moveAnchor.y;
@@ -415,43 +504,39 @@ export const Grid = () => {
                         <div key={`ghost-${m.id}`} style={{ opacity: 0.6, pointerEvents: 'none', zIndex: 20 }}>
                             <Machine
                                 data={{ ...m, x: ghostX, y: ghostY }}
-                                isSelected={true} // 高亮顯示
+                                isSelected={true} // 高亮显示
                             />
                         </div>
                     );
                 })}
 
-                {/* 機器預覽 (單個) */}
-                {ghostConfig && hoverPos && (
+                {/* 设施预览 (单个) */}
+                {ghostConfig && ghostPos && (
                     <>
                         {ghostConfig.supplyRange && (
                             <div
+                                className="power-range-preview"
                                 style={{
-                                    left: (hoverPos.x + (ghostWidth / 2) - (ghostConfig.supplyRange / 2)) * GRID_SIZE,
-                                    top: (hoverPos.y + (ghostHeight / 2) - (ghostConfig.supplyRange / 2)) * GRID_SIZE,
+                                    left: (ghostPos.x + (ghostWidth / 2) - (ghostConfig.supplyRange / 2)) * GRID_SIZE,
+                                    top: (ghostPos.y + (ghostHeight / 2) - (ghostConfig.supplyRange / 2)) * GRID_SIZE,
                                     width: ghostConfig.supplyRange * GRID_SIZE,
-                                    height: ghostConfig.supplyRange * GRID_SIZE,
-                                    position: 'absolute',
-                                    border: '2px dashed #ffcc00',
-                                    backgroundColor: 'rgba(255, 204, 0, 0.2)',
-                                    pointerEvents: 'none',
-                                    zIndex: 5
+                                    height: ghostConfig.supplyRange * GRID_SIZE
                                 }}
                             />
                         )}
                         <div
                             className={classNames('machine-ghost', { 'invalid-placement': isGhostInvalid })}
                             style={{
-                                left: hoverPos.x * GRID_SIZE,
-                                top: hoverPos.y * GRID_SIZE,
+                                left: ghostPos.x * GRID_SIZE,
+                                top: ghostPos.y * GRID_SIZE,
                                 width: ghostWidth * GRID_SIZE,
                                 height: ghostHeight * GRID_SIZE,
                             } as React.CSSProperties}
                         />
                         {/* 預覽箭頭 */}
                         {ghostPorts.map((p, i) => {
-                            let arrowX = hoverPos.x + p.x;
-                            let arrowY = hoverPos.y + p.y;
+                            let arrowX = ghostPos.x + p.x;
+                            let arrowY = ghostPos.y + p.y;
                             let rotation = 0;
                             const isInput = p.isInput;
 
@@ -459,7 +544,7 @@ export const Grid = () => {
                             switch (p.side) {
                                 case 'left':
                                     arrowX -= 1;
-                                    rotation = isInput ? 0 : 180; // 輸入：指向機器，輸出：背向機器
+                                    rotation = isInput ? 0 : 180; // 输入：指向设施，输出：背向设施
                                     break;
                                 case 'right':
                                     arrowX += 1; // 因為 p.x 是內部座標

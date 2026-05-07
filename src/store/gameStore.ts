@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { GameMode } from '../types';
-import type { Connection, PlacedMachine, Point, Direction } from '../types';
+import type { Connection, ConnectionKind, PlacedMachine, Point, Direction, Side } from '../types';
 import { FACILITIES } from '../config/facilities';
 import { checkCollision, findPath } from '../utils/gridUtils';
 import { getRotatedDimensions, getRotatedPorts } from '../utils/machineUtils';
@@ -22,6 +22,7 @@ interface GameState {
     // Wiring State
     isWiring: boolean;
     isWiringValid: boolean;
+    wiringKind: ConnectionKind;
     wiringSource: { machineId: string; portIndex: number; absolutePos: Point } | null;
     wiringFixedPath: Point[]; // Anchored segments
     wiringPreviewPath: Point[]; // Fixed + Current Preview
@@ -35,6 +36,7 @@ interface GameState {
     gridHeight: number;
 
     movingMachineBackup: PlacedMachine | null; // Stores machine while moving
+    movingMachineGrabOffset: Point | null;
 
     // Box Selection & Batch Move
     selectionStart: Point | null;
@@ -68,7 +70,7 @@ interface GameState {
     rotatePreview: () => void;
     addMachine: (machineId: string, x: number, y: number, rotation: Direction) => void;
     removeMachine: (instanceId: string) => void;
-    pickupMachine: (instanceId: string) => void;
+    pickupMachine: (instanceId: string, grabOffset?: Point) => void;
     cancelOperation: () => void; // Cancels wiring or placement/move
     setGridSize: (width: number, height: number) => void;
 
@@ -100,7 +102,7 @@ interface GameState {
     setCurrentBlueprint: (id: string, name: string) => void;
     resetGame: () => void;
 
-    startWiring: (machineInstanceId: string, portIndex: number, absolutePos: Point) => void;
+    startWiring: (machineInstanceId: string, portIndex: number, absolutePos: Point, kind: ConnectionKind) => void;
     updateWiringPreview: (mouseGridPos: Point) => void;
     addWiringAnchor: (pos: Point) => void;
     commitWiring: () => void;
@@ -117,6 +119,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     selectedMachineId: null,
     previewRotation: 0,
     movingMachineBackup: null,
+    movingMachineGrabOffset: null,
 
     selectionStart: null,
     selectionEnd: null,
@@ -139,6 +142,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     isWiring: false,
     isWiringValid: true,
+    wiringKind: 'belt',
     wiringSource: null,
     wiringFixedPath: [],
     wiringPreviewPath: [],
@@ -159,12 +163,33 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (movingMachineBackup) {
             set(state => ({
                 machines: [...state.machines, movingMachineBackup],
-                movingMachineBackup: null
+                movingMachineBackup: null,
+                movingMachineGrabOffset: null
             }));
         }
         set({ selectedMachineId: machineId, mode: GameMode.BUILD, previewRotation: 0 });
     },
-    rotatePreview: () => set(state => ({ previewRotation: (state.previewRotation + 1) % 4 as Direction })),
+    rotatePreview: () => set(state => {
+        const nextRotation = (state.previewRotation + 1) % 4 as Direction;
+
+        if (!state.movingMachineBackup || !state.movingMachineGrabOffset) {
+            return { previewRotation: nextRotation };
+        }
+
+        const config = FACILITIES.find(m => m.id === state.movingMachineBackup?.machineId);
+        if (!config) return { previewRotation: nextRotation };
+
+        const oldDims = getRotatedDimensions(config.width, config.height, state.previewRotation);
+        const newDims = getRotatedDimensions(config.width, config.height, nextRotation);
+
+        return {
+            previewRotation: nextRotation,
+            movingMachineGrabOffset: {
+                x: state.movingMachineGrabOffset.x - oldDims.width / 2 + newDims.width / 2,
+                y: state.movingMachineGrabOffset.y - oldDims.height / 2 + newDims.height / 2,
+            }
+        };
+    }),
     setZoom: (zoom) => set({ zoom }),
     setPan: (pan) => set({ pan }),
 
@@ -251,11 +276,15 @@ export const useGameStore = create<GameState>((set, get) => ({
         const config = FACILITIES.find(m => m.id === machineId);
         if (!config) return;
 
+        const { movingMachineBackup, movingMachineGrabOffset } = get();
+        const placeX = movingMachineBackup && movingMachineGrabOffset ? Math.round(x - movingMachineGrabOffset.x) : x;
+        const placeY = movingMachineBackup && movingMachineGrabOffset ? Math.round(y - movingMachineGrabOffset.y) : y;
+
         // Collision Check
         const { width, height } = getRotatedDimensions(config.width, config.height, rotation);
         const candidateRect = {
-            x,
-            y,
+            x: placeX,
+            y: placeY,
             width,
             height
         };
@@ -274,14 +303,13 @@ export const useGameStore = create<GameState>((set, get) => ({
             return;
         }
 
-        const { movingMachineBackup } = get();
         let finalId: any = crypto.randomUUID();
         let shouldClearConnections = false;
 
         if (movingMachineBackup) {
             finalId = movingMachineBackup.id; // Preserve ID
             // Check if position changed
-            if (movingMachineBackup.x !== x || movingMachineBackup.y !== y) {
+            if (movingMachineBackup.x !== placeX || movingMachineBackup.y !== placeY) {
                 shouldClearConnections = true;
             }
         }
@@ -289,8 +317,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         const newMachine: PlacedMachine = {
             id: finalId,
             machineId,
-            x,
-            y,
+            x: placeX,
+            y: placeY,
             rotation,
         };
 
@@ -325,7 +353,8 @@ export const useGameStore = create<GameState>((set, get) => ({
                     return true;
                 })
                 : state.connections,
-            movingMachineBackup: null // Clear backup on successful placement (move completed)
+            movingMachineBackup: null, // Clear backup on successful placement (move completed)
+            movingMachineGrabOffset: null
         }));
     },
 
@@ -337,7 +366,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         }));
     },
 
-    pickupMachine: (instanceId) => {
+    pickupMachine: (instanceId, grabOffset) => {
         get().takeSnapshot();
         const { machines } = get();
         const machine = machines.find(m => m.id === instanceId);
@@ -347,6 +376,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             movingMachineBackup: machine,
             selectedMachineId: machine.machineId,
             previewRotation: machine.rotation,
+            movingMachineGrabOffset: grabOffset ?? null,
             mode: GameMode.BUILD,
             machines: machines.filter(m => m.id !== instanceId),
             // Do NOT clear connections here. We wait until placement to decide.
@@ -362,6 +392,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             set(state => ({
                 machines: [...state.machines, movingMachineBackup],
                 movingMachineBackup: null,
+                movingMachineGrabOffset: null,
                 selectedMachineId: null,
                 mode: GameMode.BUILD
             }));
@@ -400,10 +431,24 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
     },
 
-    startWiring: (machineInstanceId, portIndex, absolutePos) => {
+    startWiring: (machineInstanceId, portIndex, absolutePos, kind) => {
+        const { connections } = get();
+        const nextConnections = connections.filter(conn =>
+            !(
+                conn.fromOriginal.machineId === machineInstanceId &&
+                conn.fromOriginal.portIndex === portIndex &&
+                (conn.kind || 'belt') === kind
+            )
+        );
+        if (nextConnections.length !== connections.length) {
+            get().takeSnapshot();
+        }
+
         set({
+            connections: nextConnections,
             isWiring: true,
             isWiringValid: true,
+            wiringKind: kind,
             wiringSource: { machineId: machineInstanceId, portIndex, absolutePos },
             wiringFixedPath: [absolutePos],
             wiringPreviewPath: [absolutePos] // Start point
@@ -411,14 +456,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     updateWiringPreview: (mouseGridPos) => {
-        const { wiringSource, machines, wiringFixedPath } = get();
+        const { wiringSource, machines, wiringFixedPath, wiringKind, connections } = get();
         if (!wiringSource || wiringFixedPath.length === 0) return;
 
         const start = wiringFixedPath[wiringFixedPath.length - 1]; // Start from last anchor
         const end = mouseGridPos;
 
         // Determine Start Side (only matters if we are at the very beginning of the whole path)
-        let startSide: 'top' | 'right' | 'bottom' | 'left' | undefined;
+        let startSide: Side | undefined;
         if (wiringFixedPath.length === 1) { // Only first point
             const sourceMachine = machines.find(m => m.id === wiringSource.machineId);
             if (sourceMachine) {
@@ -433,7 +478,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
 
         // Determine End Side if hovering a valid input port
-        let endSide: 'top' | 'right' | 'bottom' | 'left' | undefined;
+        let endSide: Side | undefined;
+        let isMatchingInput = false;
         // Naive check: is mouse on any machine's input port?
         for (const m of machines) {
             const config = FACILITIES.find(mc => mc.id === m.machineId);
@@ -443,8 +489,10 @@ export const useGameStore = create<GameState>((set, get) => ({
             inputs.forEach((p) => {
                 const absX = m.x + p.x;
                 const absY = m.y + p.y;
-                if (absX === end.x && absY === end.y) {
+                const portKind: ConnectionKind = p.kind === 'pipe' ? 'pipe' : 'belt';
+                if (absX === end.x && absY === end.y && portKind === wiringKind) {
                     endSide = p.side;
+                    isMatchingInput = true;
                 }
             });
         }
@@ -453,9 +501,15 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         if (segmentPath) {
             const cleanSegment = segmentPath.length > 0 ? segmentPath.slice(1) : [];
+            const previewPath = [...wiringFixedPath, ...cleanSegment];
+            const occupied = new Set<string>();
+            connections
+                .filter(conn => (conn.kind || 'belt') === wiringKind)
+                .forEach(conn => conn.path.forEach(p => occupied.add(`${p.x},${p.y}`)));
+            const hasOverlap = previewPath.some(p => occupied.has(`${p.x},${p.y}`));
             set({
-                wiringPreviewPath: [...wiringFixedPath, ...cleanSegment],
-                isWiringValid: true
+                wiringPreviewPath: previewPath,
+                isWiringValid: isMatchingInput && !hasOverlap
             });
         } else {
             // Invalid path - Show straight line but flag as invalid
@@ -468,14 +522,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     addWiringAnchor: (pos) => {
-        const { wiringSource, machines, wiringFixedPath } = get();
+        const { wiringSource, machines, wiringFixedPath, wiringKind, connections } = get();
         if (!wiringSource || wiringFixedPath.length === 0) return;
 
         const start = wiringFixedPath[wiringFixedPath.length - 1];
         const end = pos;
 
         // Check validity before adding anchor
-        let startSide: 'top' | 'right' | 'bottom' | 'left' | undefined;
+        let startSide: Side | undefined;
         if (wiringFixedPath.length === 1) {
             const sourceMachine = machines.find(m => m.id === wiringSource.machineId);
             if (sourceMachine) {
@@ -493,14 +547,21 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         if (segmentPath) {
             const cleanSegment = segmentPath.length > 0 ? segmentPath.slice(1) : [];
-            set({ wiringFixedPath: [...wiringFixedPath, ...cleanSegment] });
+            const nextPath = [...wiringFixedPath, ...cleanSegment];
+            const occupied = new Set<string>();
+            connections
+                .filter(conn => (conn.kind || 'belt') === wiringKind)
+                .forEach(conn => conn.path.forEach(p => occupied.add(`${p.x},${p.y}`)));
+            if (!nextPath.some(p => occupied.has(`${p.x},${p.y}`))) {
+                set({ wiringFixedPath: nextPath });
+            }
         } else {
             // Do nothing if invalid? Or feedback?
         }
     },
 
     commitWiring: () => {
-        const { wiringSource, wiringPreviewPath, isWiringValid, machines, connections } = get();
+        const { wiringSource, wiringPreviewPath, isWiringValid, machines, wiringKind } = get();
         if (!wiringSource || wiringPreviewPath.length < 2 || !isWiringValid) {
             get().cancelWiring();
             return;
@@ -521,7 +582,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             const portIndex = inputs.findIndex(p => {
                 const absX = m.x + p.x;
                 const absY = m.y + p.y;
-                return absX === end.x && absY === end.y;
+                const portKind: ConnectionKind = p.kind === 'pipe' ? 'pipe' : 'belt';
+                return absX === end.x && absY === end.y && portKind === wiringKind;
             });
 
             if (portIndex !== -1) {
@@ -530,65 +592,19 @@ export const useGameStore = create<GameState>((set, get) => ({
             }
         }
 
-        // --- Logistics Bridge Generation Logic ---
-        const intersections = new Set<string>();
-        const existingPoints = new Set<string>();
-
-        // 1. Index all existing connection points
-        for (const conn of connections) {
-            for (const p of conn.path) {
-                existingPoints.add(`${p.x},${p.y}`);
-            }
-        }
-
-        // 2. Identify intersections (including self-intersections in the new path)
-        const currentPathSet = new Set<string>();
-        for (const p of wiringPreviewPath) {
-            const key = `${p.x},${p.y}`;
-            if (existingPoints.has(key) || currentPathSet.has(key)) {
-                intersections.add(key);
-            }
-            currentPathSet.add(key);
-        }
-
-        // 3. Filter out locations occupied by machines and create bridges
-        const bridgesToCreate: PlacedMachine[] = [];
-        for (const key of intersections) {
-            const [sx, sy] = key.split(',');
-            const x = parseInt(sx);
-            const y = parseInt(sy);
-
-            // Check if occupied by any machine
-            const isOccupied = machines.some(m => {
-                const config = FACILITIES.find(c => c.id === m.machineId);
-                if (!config) return false;
-                const { width, height } = getRotatedDimensions(config.width, config.height, m.rotation);
-                return x >= m.x && x < m.x + width && y >= m.y && y < m.y + height;
-            });
-
-            if (!isOccupied) {
-                bridgesToCreate.push({
-                    id: crypto.randomUUID(),
-                    machineId: 'logistics-bridge',
-                    x,
-                    y,
-                    rotation: 0
-                });
-            }
-        }
-
         const newConnection: Connection = {
             id: crypto.randomUUID(),
             fromOriginal: { machineId: wiringSource.machineId, portIndex: wiringSource.portIndex },
             toOriginal,
-            path: [...wiringPreviewPath]
+            path: [...wiringPreviewPath],
+            kind: wiringKind
         };
 
         set(state => ({
-            machines: [...state.machines, ...bridgesToCreate],
             connections: [...state.connections, newConnection],
             isWiring: false,
             isWiringValid: true,
+            wiringKind: 'belt',
             wiringSource: null,
             wiringFixedPath: [],
             wiringPreviewPath: []
@@ -596,7 +612,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     cancelWiring: () => {
-        set({ isWiring: false, isWiringValid: true, wiringSource: null, wiringFixedPath: [], wiringPreviewPath: [] });
+        set({ isWiring: false, isWiringValid: true, wiringKind: 'belt', wiringSource: null, wiringFixedPath: [], wiringPreviewPath: [] });
     },
 
     // Box Selection Implementation
@@ -1037,7 +1053,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     loadGame: (machines, connections, gridWidth, gridHeight, blueprintId, blueprintName) => {
         // Clear history on new load?
-        // User said: "這個紀錄並不保存在藍圖存檔中，所以當我刷新或關閉網頁後，就會重新記錄"
+        // User said: "这个记录并不保存在蓝图存档中，所以当我刷新或关闭网页后，就会重新记录"
         // Also "refresh or close webpage => re-record".
         // Loading a blueprint effectively resets the session for that blueprint?
         // Usually yes, or we could treat load as a push to history?
@@ -1054,6 +1070,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             mode: GameMode.BUILD,
             selectedMachineId: null,
             movingMachineBackup: null,
+            movingMachineGrabOffset: null,
             history: { past: [], future: [] }
         });
     },
@@ -1069,6 +1086,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             mode: GameMode.BUILD,
             selectedMachineId: null,
             movingMachineBackup: null,
+            movingMachineGrabOffset: null,
             history: { past: [], future: [] }
         });
     }

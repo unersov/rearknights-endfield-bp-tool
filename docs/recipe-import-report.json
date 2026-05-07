@@ -1,0 +1,30 @@
+{
+  "csvRows": 108,
+  "recipes": 116,
+  "unresolvedFacilities": [],
+  "unresolvedItems": [
+    "紫晶质",
+    "荞花柑实粉末",
+    "蓝铁瓶(芽针溶液)",
+    "赤铜瓶(芽针溶液)",
+    "蓝铁瓶(锦草溶液)",
+    "赤铜瓶(锦草溶液)"
+  ],
+  "wildcard": [
+    "*瓶子",
+    "*液体",
+    "*瓶子(*液体)"
+  ],
+  "synonymUses": [
+    {
+      "from": "息壤",
+      "to": "息壞"
+    },
+    {
+      "from": "重息壤",
+      "to": "重息壞"
+    }
+  ],
+  "abnormal": [],
+  "duplicateRecipes": []
+}

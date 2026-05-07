@@ -15,7 +15,8 @@ type MinifiedConnection = [
     number, // fromPort
     number, // toIdx
     number, // toPort
-    number[] // flat path [x1, y1, x2, y2...]
+    number[], // flat path [x1, y1, x2, y2...]
+    number? // kind: 0/undefined = belt, 1 = pipe
 ];
 
 interface MinifiedBlueprint {
@@ -78,7 +79,8 @@ const minifyBlueprint = (data: any): MinifiedBlueprint => {
             c.fromOriginal.portIndex,
             toIdx,
             c.toOriginal?.portIndex ?? -1,
-            flatPath
+            flatPath,
+            c.kind === 'pipe' ? 1 : 0
         ];
     });
 
@@ -120,7 +122,8 @@ const expandBlueprint = (data: MinifiedBlueprint): any => {
             id: crypto.randomUUID(),
             fromOriginal: { machineId: fromId, portIndex: c[1] },
             toOriginal: toId ? { machineId: toId, portIndex: c[3] } : null,
-            path
+            path,
+            kind: c[5] === 1 ? 'pipe' : 'belt'
         };
     });
 

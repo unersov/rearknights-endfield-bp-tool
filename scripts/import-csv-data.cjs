@@ -132,7 +132,7 @@ const colorByRarity = {
 
 const sideMap = { L: 'left', R: 'right', U: 'top', D: 'bottom' };
 
-const parsePorts = (raw, warnings, facilityName, fieldName) => {
+const parsePorts = (raw, warnings, facilityName, fieldName, kind) => {
   if (!raw) return [];
   return raw
     .split(/\s+/)
@@ -144,7 +144,7 @@ const parsePorts = (raw, warnings, facilityName, fieldName) => {
         warnings.push(`[Facility:${facilityName}] Cannot parse ${fieldName} port token: ${token}`);
         return [];
       }
-      return [{ x: Number(match[1]), y: Number(match[2]), side: sideMap[match[3]] }];
+      return [{ x: Number(match[1]), y: Number(match[2]), side: sideMap[match[3]], kind }];
     });
 };
 
@@ -240,13 +240,15 @@ const facilities = facilityRows.map((row, index) => {
   const width = sizeMatch ? Number(sizeMatch[1]) : 0;
   const height = sizeMatch ? Number(sizeMatch[2]) : 0;
   const inputs = [
-    ...parsePorts(row['物品输入口及朝向（x,y）'], warnings, id, 'item input'),
-    ...parsePorts(row['管道输入口及朝向（x,y）'], warnings, id, 'pipe input'),
+    ...parsePorts(row['物品输入口及朝向（x,y）'], warnings, id, 'item input', 'item'),
+    ...parsePorts(row['管道输入口及朝向（x,y）'], warnings, id, 'pipe input', 'pipe'),
   ];
   const outputs = [
-    ...parsePorts(row['物品输出口及朝向（x,y）'], warnings, id, 'item output'),
-    ...parsePorts(row['管道输出口及朝向（x,y）'], warnings, id, 'pipe output'),
+    ...parsePorts(row['物品输出口及朝向（x,y）'], warnings, id, 'item output', 'item'),
+    ...parsePorts(row['管道输出口及朝向（x,y）'], warnings, id, 'pipe output', 'pipe'),
   ];
+  const supplyRangeMatch = row['备注/放置限制'].match(/(\d+)\s*\*\s*(\d+)\s*格/);
+  const supplyRange = supplyRangeMatch ? Number(supplyRangeMatch[1]) : undefined;
 
   if (!name) errors.push(`[Facility row ${index + 2}] Missing Chinese name`);
   if (!nameEn) errors.push(`[Facility row ${index + 2}] Missing English name`);
@@ -274,6 +276,7 @@ const facilities = facilityRows.map((row, index) => {
     icon: iconByFacilityId[id],
     category,
     rarity,
+    supplyRange,
     notes: row['备注/放置限制'] || undefined,
   };
 });

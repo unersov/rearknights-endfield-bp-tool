@@ -76,12 +76,12 @@ export default function App() {
         // Use a temp ID or null? 
         // If we use null, 'Save' -> Create New. Perfect for "User B saves -> becomes their own"
         null,
-        'Shared Blueprint'
+        '分享蓝图'
       );
       setUiView('editor');
       setIsLoading(false);
       toaster.create({
-        title: "載入分享藍圖成功",
+        title: "载入分享蓝图成功",
         type: "success",
         duration: 3000,
       });
@@ -252,7 +252,7 @@ export default function App() {
       // Save Selection
       saveBlueprint(null, name, pendingSaveData);
       toaster.create({
-        title: `已將選取內容另存為 "${name}"`,
+        title: `已将选取内容另存为 "${name}"`,
         type: "success",
         duration: 3000,
       });
@@ -272,7 +272,7 @@ export default function App() {
       setCurrentBlueprint(newBp.id, newBp.name);
       setLastBlueprintId(newBp.id);
       toaster.create({
-        title: "藍圖已建立",
+        title: "蓝图已建立",
         type: "success",
         duration: 2000,
       });

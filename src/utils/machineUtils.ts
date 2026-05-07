@@ -39,7 +39,7 @@ export const getRotatedPorts = (
             }
         }
 
-        return { x, y, side };
+        return { ...p, x, y, side };
     });
 };
 

@@ -45,6 +45,7 @@
     .actions {
         display: flex;
         gap: 16px;
+        align-items: center;
 
         button {
             background-color: var(--gray-light);
@@ -60,6 +61,12 @@
                 background-color: var(--gray-dark);
                 color: var(--yellow);
             }
+        }
+
+        .recipe-button {
+            min-width: 88px;
+            height: 36px;
+            font-weight: 700;
         }
     }
 }
