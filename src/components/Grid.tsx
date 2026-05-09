@@ -69,33 +69,68 @@ export const Grid = () => {
     const [isPanning, setIsPanning] = React.useState(false);
     const lastMousePos = useRef<Point>({ x: 0, y: 0 });
     const didPanRef = useRef(false);
+    const pressedPanKeysRef = useRef<Set<string>>(new Set());
+    const panAnimationRef = useRef<number | null>(null);
+    const lastPanFrameTimeRef = useRef<number | null>(null);
 
     // 快捷鍵 E 和 R
     const setMode = useGameStore(s => s.setMode);
     useEffect(() => {
+        const stopSmoothPan = () => {
+            if (panAnimationRef.current !== null) {
+                cancelAnimationFrame(panAnimationRef.current);
+                panAnimationRef.current = null;
+            }
+            lastPanFrameTimeRef.current = null;
+        };
+
+        const runSmoothPan = (timestamp: number) => {
+            const keys = pressedPanKeysRef.current;
+            if (keys.size === 0) {
+                stopSmoothPan();
+                return;
+            }
+
+            const lastTimestamp = lastPanFrameTimeRef.current ?? timestamp;
+            const deltaSeconds = Math.min((timestamp - lastTimestamp) / 1000, 0.05);
+            lastPanFrameTimeRef.current = timestamp;
+
+            let dx = 0;
+            let dy = 0;
+            if (keys.has('a')) dx += 1;
+            if (keys.has('d')) dx -= 1;
+            if (keys.has('w')) dy += 1;
+            if (keys.has('s')) dy -= 1;
+
+            if (dx !== 0 || dy !== 0) {
+                const speed = 520;
+                const length = Math.hypot(dx, dy) || 1;
+                const currentPan = useGameStore.getState().pan;
+                useGameStore.getState().setPan({
+                    x: currentPan.x + (dx / length) * speed * deltaSeconds,
+                    y: currentPan.y + (dy / length) * speed * deltaSeconds,
+                });
+            }
+
+            panAnimationRef.current = requestAnimationFrame(runSmoothPan);
+        };
+
+        const startSmoothPan = () => {
+            if (panAnimationRef.current === null) {
+                lastPanFrameTimeRef.current = null;
+                panAnimationRef.current = requestAnimationFrame(runSmoothPan);
+            }
+        };
+
         const handleKeyDown = (e: KeyboardEvent) => {
             const target = e.target as HTMLElement | null;
             const isTyping = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
             if (!isTyping && !e.ctrlKey && !e.metaKey) {
-                const panStep = 80;
-                if (e.key.toLowerCase() === 'w') {
+                const panKey = e.key.toLowerCase();
+                if (['w', 'a', 's', 'd'].includes(panKey)) {
                     e.preventDefault();
-                    setPan({ x: pan.x, y: pan.y + panStep });
-                    return;
-                }
-                if (e.key.toLowerCase() === 's') {
-                    e.preventDefault();
-                    setPan({ x: pan.x, y: pan.y - panStep });
-                    return;
-                }
-                if (e.key.toLowerCase() === 'a') {
-                    e.preventDefault();
-                    setPan({ x: pan.x + panStep, y: pan.y });
-                    return;
-                }
-                if (e.key.toLowerCase() === 'd') {
-                    e.preventDefault();
-                    setPan({ x: pan.x - panStep, y: pan.y });
+                    pressedPanKeysRef.current.add(panKey);
+                    startSmoothPan();
                     return;
                 }
             }
@@ -135,9 +170,29 @@ export const Grid = () => {
                 cancelOperation();
             }
         };
+        const handleKeyUp = (e: KeyboardEvent) => {
+            const panKey = e.key.toLowerCase();
+            if (['w', 'a', 's', 'd'].includes(panKey)) {
+                pressedPanKeysRef.current.delete(panKey);
+                if (pressedPanKeysRef.current.size === 0) {
+                    stopSmoothPan();
+                }
+            }
+        };
+        const handleWindowBlur = () => {
+            pressedPanKeysRef.current.clear();
+            stopSmoothPan();
+        };
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [mode, setMode, rotatePreview, deleteSelected, startBatchMove, cancelOperation, pan, setPan]);
+        window.addEventListener('keyup', handleKeyUp);
+        window.addEventListener('blur', handleWindowBlur);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+            window.removeEventListener('blur', handleWindowBlur);
+            stopSmoothPan();
+        };
+    }, [mode, setMode, rotatePreview, deleteSelected, startBatchMove, cancelOperation]);
 
     const getGridPos = (e: React.MouseEvent): Point => {
         if (!containerRef.current) return { x: 0, y: 0 };
@@ -447,10 +502,14 @@ export const Grid = () => {
                                             points={points}
                                             className="connection-hitbox"
                                             onClick={(event) => {
+                                                if (mode === GameMode.BUILD && selectedMachineId) return;
                                                 event.stopPropagation();
                                                 selectConnection(conn.id);
                                             }}
-                                            onMouseDown={(event) => event.stopPropagation()}
+                                            onMouseDown={(event) => {
+                                                if (mode === GameMode.BUILD && selectedMachineId) return;
+                                                event.stopPropagation();
+                                            }}
                                         />
                                         {getConnectionArrows(conn.path).map(({ point, rotation }, index) => (
                                             <g

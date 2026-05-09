@@ -19,7 +19,7 @@ const getMachineInputItems = (machine: PlacedMachine, machines: PlacedMachine[],
     connections
         .filter(connection => connection.toOriginal?.machineId === machine.id)
         .sort((a, b) => (a.toOriginal?.portIndex ?? 0) - (b.toOriginal?.portIndex ?? 0))
-        .map(connection => getConnectionCarriedItem(connection, machines))
+        .map(connection => getConnectionCarriedItem(connection, machines, new Map(), connections))
         .filter((item): item is Item => Boolean(item));
 
 const findCurrentRecipe = (machine: PlacedMachine, inputItems: Item[]): Recipe | undefined => {
@@ -90,7 +90,7 @@ export const FacilityDetailPanel = () => {
                 (typedPort.kind || 'item') === (port.kind || 'item');
         });
         if (!connection) return undefined;
-        return getConnectionCarriedItem(connection, machines);
+        return getConnectionCarriedItem(connection, machines, new Map(), connections);
     };
 
     return (

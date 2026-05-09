@@ -105,6 +105,17 @@ const getNearestPortIndex = (
     return bestIndex;
 };
 
+export const getNearestAnyOutputPortIndex = (
+    config: FacilityConfig,
+    machine: PlacedMachine,
+    kind: ConnectionKind,
+    target: Point
+): number => {
+    const outputs = getConnectionOutputs(config, machine, kind);
+    if (outputs.length === 0) return -1;
+    return getNearestPortIndex(outputs, machine, target);
+};
+
 export const getNearestOutputPortIndex = (
     config: FacilityConfig,
     machine: PlacedMachine,

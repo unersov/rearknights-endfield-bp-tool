@@ -10,7 +10,7 @@ import { getRotatedDimensions, getRotatedPorts, isMachinePowered } from '../util
 import { ItemIcon } from './ItemIcon';
 import { canFacilityRunMultipleRecipes, findMatchingRecipeByInputs, findSatisfiedRecipesByInputs, getItemByIdIncludingDynamic, getRecipesForFacility } from '../utils/dynamicRecipes';
 import { getRecipeItemsByKind } from '../utils/recipePorts';
-import { getConnectionInputs, getConnectionOutputs, getFacilityImageId, getNearestOutputPortIndex, isLogisticsFacility, isOutputPortConnected, shouldRotateFacilityImage } from '../utils/facilityLogistics';
+import { getConnectionInputs, getConnectionOutputs, getFacilityImageId, getNearestAnyOutputPortIndex, getNearestOutputPortIndex, isLogisticsFacility, isOutputPortConnected, shouldRotateFacilityImage } from '../utils/facilityLogistics';
 import { isDepotBusSectionOperational, isWarehousePortOperational } from '../utils/placementRules';
 import { getConnectionCarriedItem } from '../utils/connectionContent';
 
@@ -67,10 +67,15 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                 return;
             }
 
-            const outputIndex = getNearestOutputPortIndex(config, data, kind, target, connections);
+            let replaceExisting = false;
+            let outputIndex = getNearestOutputPortIndex(config, data, kind, target, connections);
+            if (outputIndex === -1) {
+                outputIndex = getNearestAnyOutputPortIndex(config, data, kind, target);
+                replaceExisting = outputIndex !== -1;
+            }
             if (outputIndex !== -1) {
                 const output = getConnectionOutputs(config, data, kind)[outputIndex];
-                startWiring(data.id, outputIndex, { x: data.x + output.x, y: data.y + output.y }, kind);
+                startWiring(data.id, outputIndex, { x: data.x + output.x, y: data.y + output.y }, kind, replaceExisting);
             }
             return;
         }
@@ -218,11 +223,10 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         e.stopPropagation();
         const kind = getConnectionKind(portRel);
         if (mode === modeForKind(kind)) {
-            if (isOutputPortConnected(data.id, portIndex, kind, connections)) return;
             // 计算端口的绝对网格坐标
             const absX = data.x + portRel.x;
             const absY = data.y + portRel.y;
-            startWiring(data.id, portIndex, { x: absX, y: absY }, kind);
+            startWiring(data.id, portIndex, { x: absX, y: absY }, kind, isOutputPortConnected(data.id, portIndex, kind, connections));
         }
     };
 
@@ -240,7 +244,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                 typedInput.side === targetPort.side &&
                 (typedInput.kind || 'item') === (targetPort.kind || 'item');
         });
-        return connection ? getConnectionCarriedItem(connection, machines) : undefined;
+        return connection ? getConnectionCarriedItem(connection, machines, new Map(), connections) : undefined;
     };
     const incomingItemIds = inputs
         .map((_, index) => getIncomingItemForPort(index)?.id)

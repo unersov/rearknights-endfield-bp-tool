@@ -30,7 +30,7 @@ export const MaterialSelector: React.FC = () => {
 
         const inputItems = connections
             .filter(connection => connection.toOriginal?.machineId === machine.id)
-            .map(connection => getConnectionCarriedItem(connection, machines))
+            .map(connection => getConnectionCarriedItem(connection, machines, new Map(), connections))
             .filter((item): item is NonNullable<typeof item> => Boolean(item));
         const inputIds = inputItems.map(item => item.id);
         const unique = new Map<string, NonNullable<typeof inputItems[number]>>();

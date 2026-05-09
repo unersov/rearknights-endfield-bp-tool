@@ -27,7 +27,8 @@ interface GameState {
     isWiring: boolean;
     isWiringValid: boolean;
     wiringKind: ConnectionKind;
-    wiringSource: { machineId: string; portIndex: number; absolutePos: Point } | null;
+    wiringSource: { machineId: string; portIndex: number; absolutePos: Point; replaceExisting?: boolean } | null;
+    wiringTarget: { machineId: string; portIndex: number } | null;
     wiringFixedPath: Point[]; // Anchored segments
     wiringPreviewPath: Point[]; // Fixed + Current Preview
 
@@ -86,6 +87,7 @@ interface GameState {
     clearSelection: () => void;
     selectConnection: (connectionId: string) => void;
     deleteSelected: () => void;
+    deleteConnection: (connectionId: string) => void;
 
     // Batch Move Actions
     startBatchMove: (anchor: Point) => void;
@@ -113,7 +115,7 @@ interface GameState {
     setCurrentBlueprint: (id: string, name: string) => void;
     resetGame: () => void;
 
-    startWiring: (machineInstanceId: string, portIndex: number, absolutePos: Point, kind: ConnectionKind) => void;
+    startWiring: (machineInstanceId: string, portIndex: number, absolutePos: Point, kind: ConnectionKind, replaceExisting?: boolean) => void;
     updateWiringPreview: (mouseGridPos: Point) => void;
     addWiringAnchor: (pos: Point) => void;
     commitWiring: () => void;
@@ -145,6 +147,19 @@ const getEntrySide = (from: Point, to: Point): Side | undefined => {
     return undefined;
 };
 
+const getPointerSide = (machine: PlacedMachine, pointer: Point): Side | undefined => {
+    const localX = pointer.x - machine.x;
+    const localY = pointer.y - machine.y;
+    const distances: Array<{ side: Side; distance: number }> = [
+        { side: 'left', distance: Math.abs(localX) },
+        { side: 'right', distance: Math.abs(localX - 1) },
+        { side: 'top', distance: Math.abs(localY) },
+        { side: 'bottom', distance: Math.abs(localY - 1) },
+    ];
+    distances.sort((a, b) => a.distance - b.distance);
+    return distances[0]?.side;
+};
+
 const isLogisticsPointForKind = (point: Point, machines: PlacedMachine[], kind: ConnectionKind) =>
     machines.some(machine => machine.x === point.x && machine.y === point.y && canFacilityActAsConnectionNode(machine.machineId, kind));
 
@@ -174,12 +189,15 @@ const getMatchingInputAtPoint = (
         if (!config) continue;
 
         const inputs = getConnectionInputs(config, machine, kind);
-        if (preferredSide) {
+        const dims = getRotatedDimensions(config.width, config.height, machine.rotation);
+        const isInside = point.x >= machine.x && point.x < machine.x + dims.width && point.y >= machine.y && point.y < machine.y + dims.height;
+        const sidePreference = preferredSide || (isInside ? getPointerSide(machine, target) : undefined);
+        if (sidePreference) {
             const preferredInputIndex = inputs.findIndex((port, index) => {
                 const portKind: ConnectionKind = port.kind === 'pipe' ? 'pipe' : 'belt';
                 return machine.x + port.x === point.x &&
                     machine.y + port.y === point.y &&
-                    port.side === preferredSide &&
+                    port.side === sidePreference &&
                     portKind === kind &&
                     !isInputPortConnected(machine.id, index, kind, connections);
             });
@@ -188,8 +206,6 @@ const getMatchingInputAtPoint = (
             }
         }
 
-        const dims = getRotatedDimensions(config.width, config.height, machine.rotation);
-        const isInside = point.x >= machine.x && point.x < machine.x + dims.width && point.y >= machine.y && point.y < machine.y + dims.height;
         if (isInside) {
             const nearestInputIndex = getNearestInputPortIndex(config, machine, kind, target, connections);
             const nearestInput = nearestInputIndex !== -1 ? inputs[nearestInputIndex] : undefined;
@@ -317,7 +333,7 @@ const deriveAutoRecipeProducts = (machines: PlacedMachine[], connections: Connec
             if (!incoming || incoming.length === 0) continue;
 
             const inputItemIds = incoming
-                .map(connection => getConnectionCarriedItem(connection, nextMachines, inputIdsByMachine)?.id)
+                .map(connection => getConnectionCarriedItem(connection, nextMachines, inputIdsByMachine, connections)?.id)
                 .filter((id): id is string => Boolean(id));
             inputIdsByMachine.set(machine.id, inputItemIds);
 
@@ -392,6 +408,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     isWiringValid: true,
     wiringKind: 'belt',
     wiringSource: null,
+    wiringTarget: null,
     wiringFixedPath: [],
     wiringPreviewPath: [],
 
@@ -635,9 +652,13 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     pickupMachine: (instanceId, grabOffset) => {
         get().takeSnapshot();
-        const { machines } = get();
+        const { machines, connections } = get();
         const machine = machines.find(m => m.id === instanceId);
         if (!machine) return;
+        const nextConnections = connections.filter(connection =>
+            connection.fromOriginal.machineId !== instanceId &&
+            connection.toOriginal?.machineId !== instanceId
+        );
 
         set(() => ({
             movingMachineBackup: machine,
@@ -646,7 +667,9 @@ export const useGameStore = create<GameState>((set, get) => ({
             movingMachineGrabOffset: grabOffset ?? null,
             mode: GameMode.BUILD,
             machines: machines.filter(m => m.id !== instanceId),
-            // Do NOT clear connections here. We wait until placement to decide.
+            connections: nextConnections,
+            selectedConnectionIds: [],
+            connectionDetailId: null,
         }));
     },
 
@@ -698,15 +721,16 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
     },
 
-    startWiring: (machineInstanceId, portIndex, absolutePos, kind) => {
+    startWiring: (machineInstanceId, portIndex, absolutePos, kind, replaceExisting = false) => {
         const { connections } = get();
-        if (isOutputPortConnected(machineInstanceId, portIndex, kind, connections)) return;
+        if (!replaceExisting && isOutputPortConnected(machineInstanceId, portIndex, kind, connections)) return;
 
         set({
             isWiring: true,
             isWiringValid: true,
             wiringKind: kind,
-            wiringSource: { machineId: machineInstanceId, portIndex, absolutePos },
+            wiringSource: { machineId: machineInstanceId, portIndex, absolutePos, replaceExisting },
+            wiringTarget: null,
             wiringFixedPath: [absolutePos],
             wiringPreviewPath: [absolutePos] // Start point
         });
@@ -722,7 +746,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (wiringFixedPath.length === 1) {
             const sourceMachine = machines.find(m => m.id === wiringSource.machineId);
             const sourceConfig = sourceMachine ? FACILITIES.find(m => m.id === sourceMachine.machineId) : undefined;
-            if (sourceMachine && sourceConfig && isLogisticsFacility(sourceConfig)) {
+            if (sourceMachine && sourceConfig && isLogisticsFacility(sourceConfig) && !wiringSource.replaceExisting) {
                 const nearestOutputIndex = getNearestOutputPortIndex(sourceConfig, sourceMachine, wiringKind, mouseGridPos, connections);
                 const output = nearestOutputIndex !== -1 ? getConnectionOutputs(sourceConfig, sourceMachine, wiringKind)[nearestOutputIndex] : undefined;
                 if (output) {
@@ -735,6 +759,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 } else {
                     set({
                         wiringSource,
+                        wiringTarget: null,
                         wiringFixedPath,
                         wiringPreviewPath: [wiringSource.absolutePos, mouseCell],
                         isWiringValid: false
@@ -765,7 +790,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         // Determine End Side if hovering a valid input port
         let endSide: Side | undefined;
         let isMatchingInput = false;
-        const matchedInput = getMatchingInputAtPoint(end, mouseGridPos, machines, connections, wiringKind);
+        const matchedInput = getMatchingInputAtPoint(end, mouseGridPos, machines, connections, wiringKind, getEntrySide(start, end));
         if (matchedInput) {
             end = { x: matchedInput.machine.x + matchedInput.port.x, y: matchedInput.machine.y + matchedInput.port.y };
             endSide = matchedInput.port.side;
@@ -777,19 +802,26 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (segmentPath) {
             const cleanSegment = segmentPath.length > 0 ? segmentPath.slice(1) : [];
             const previewPath = [...activeFixedPath, ...cleanSegment];
+            const finalEnd = previewPath[previewPath.length - 1];
+            const beforeFinalEnd = previewPath[previewPath.length - 2];
+            const finalMatchedInput = matchedInput && finalEnd
+                ? getMatchingInputAtPoint(finalEnd, mouseGridPos, machines, connections, wiringKind, beforeFinalEnd ? getEntrySide(beforeFinalEnd, finalEnd) : undefined)
+                : matchedInput;
             const hasOverlap = hasPathOverlap(previewPath, connections, machines, wiringKind);
             const isInAllowedBounds = previewPath.every(p => isConnectionPointAllowed(p, wiringKind, gridWidth, gridHeight));
             set({
                 wiringSource: activeSource,
+                wiringTarget: finalMatchedInput ? { machineId: finalMatchedInput.machine.id, portIndex: finalMatchedInput.portIndex } : null,
                 wiringFixedPath: activeFixedPath,
                 wiringPreviewPath: previewPath,
-                isWiringValid: isMatchingInput && !hasOverlap && isInAllowedBounds
+                isWiringValid: Boolean(finalMatchedInput) && isMatchingInput && !hasOverlap && isInAllowedBounds
             });
         } else {
             // Invalid path - Show straight line but flag as invalid
             // We want to show a straight line to indicating intent, but red?
             set({
                 wiringSource: activeSource,
+                wiringTarget: null,
                 wiringFixedPath: activeFixedPath,
                 wiringPreviewPath: [...activeFixedPath, end],
                 isWiringValid: false
@@ -826,7 +858,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             const nextPath = [...wiringFixedPath, ...cleanSegment];
             if (!hasPathOverlap(nextPath, connections, machines, wiringKind) &&
                 nextPath.every(p => isConnectionPointAllowed(p, wiringKind, gridWidth, gridHeight))) {
-                set({ wiringFixedPath: nextPath });
+                set({ wiringFixedPath: nextPath, wiringTarget: null });
             }
         } else {
             // Do nothing if invalid? Or feedback?
@@ -834,23 +866,15 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     commitWiring: () => {
-        const { wiringSource, wiringPreviewPath, isWiringValid, machines, connections, wiringKind } = get();
-        if (!wiringSource || wiringPreviewPath.length < 2 || !isWiringValid) {
+        const { wiringSource, wiringTarget, wiringPreviewPath, isWiringValid, connections, wiringKind } = get();
+        if (!wiringSource || !wiringTarget || wiringPreviewPath.length < 2 || !isWiringValid) {
             get().cancelWiring();
             return;
         }
 
         get().takeSnapshot();
 
-        const end = wiringPreviewPath[wiringPreviewPath.length - 1];
-        const beforeEnd = wiringPreviewPath[wiringPreviewPath.length - 2];
-        const preferredEndSide = beforeEnd ? getEntrySide(beforeEnd, end) : undefined;
-        let toOriginal: { machineId: string; portIndex: number } | null = null;
-
-        const matchedInput = getMatchingInputAtPoint(end, end, machines, connections, wiringKind, preferredEndSide);
-        if (matchedInput) {
-            toOriginal = { machineId: matchedInput.machine.id, portIndex: matchedInput.portIndex };
-        } else {
+        if (isInputPortConnected(wiringTarget.machineId, wiringTarget.portIndex, wiringKind, connections)) {
             get().cancelWiring();
             return;
         }
@@ -858,13 +882,22 @@ export const useGameStore = create<GameState>((set, get) => ({
         const newConnection: Connection = {
             id: crypto.randomUUID(),
             fromOriginal: { machineId: wiringSource.machineId, portIndex: wiringSource.portIndex },
-            toOriginal,
+            toOriginal: wiringTarget,
             path: [...wiringPreviewPath],
             kind: wiringKind
         };
 
         set(state => {
-            const nextConnections = [...state.connections, newConnection];
+            const retainedConnections = wiringSource.replaceExisting
+                ? state.connections.filter(connection =>
+                    !(
+                        connection.fromOriginal.machineId === wiringSource.machineId &&
+                        connection.fromOriginal.portIndex === wiringSource.portIndex &&
+                        (connection.kind || 'belt') === wiringKind
+                    )
+                )
+                : state.connections;
+            const nextConnections = [...retainedConnections, newConnection];
             return {
                 machines: deriveAutoRecipeProducts(state.machines, nextConnections),
                 connections: nextConnections,
@@ -872,6 +905,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 isWiringValid: true,
                 wiringKind: 'belt',
                 wiringSource: null,
+                wiringTarget: null,
                 wiringFixedPath: [],
                 wiringPreviewPath: []
             };
@@ -879,7 +913,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     cancelWiring: () => {
-        set({ isWiring: false, isWiringValid: true, wiringKind: 'belt', wiringSource: null, wiringFixedPath: [], wiringPreviewPath: [] });
+        set({ isWiring: false, isWiringValid: true, wiringKind: 'belt', wiringSource: null, wiringTarget: null, wiringFixedPath: [], wiringPreviewPath: [] });
     },
 
     // Box Selection Implementation
@@ -974,6 +1008,22 @@ export const useGameStore = create<GameState>((set, get) => ({
         selectedConnectionIds: [connectionId],
         connectionDetailId: connectionId,
     }),
+
+    deleteConnection: (connectionId) => {
+        const { connections } = get();
+        if (!connections.some(connection => connection.id === connectionId)) return;
+
+        get().takeSnapshot();
+        set(state => {
+            const nextConnections = state.connections.filter(connection => connection.id !== connectionId);
+            return {
+                machines: deriveAutoRecipeProducts(state.machines, nextConnections),
+                connections: nextConnections,
+                selectedConnectionIds: state.selectedConnectionIds.filter(id => id !== connectionId),
+                connectionDetailId: state.connectionDetailId === connectionId ? null : state.connectionDetailId
+            };
+        });
+    },
 
     deleteSelected: () => {
         // Reuse remove logic? 

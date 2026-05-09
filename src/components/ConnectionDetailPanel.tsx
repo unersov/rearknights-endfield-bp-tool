@@ -1,15 +1,15 @@
-import { Badge, Box, CloseButton, Dialog, Flex, Text, VStack } from '@chakra-ui/react';
+import { Badge, Box, Button, CloseButton, Dialog, Flex, Text, VStack } from '@chakra-ui/react';
 import { useGameStore } from '../store/gameStore';
 import { getConnectionCarriedItem, getConnectionRateText } from '../utils/connectionContent';
 import { ItemIcon } from './ItemIcon';
 
 export const ConnectionDetailPanel = () => {
-    const { connectionDetailId, connections, machines, clearSelection } = useGameStore();
+    const { connectionDetailId, connections, machines, clearSelection, deleteConnection } = useGameStore();
     const connection = connectionDetailId ? connections.find(candidate => candidate.id === connectionDetailId) : null;
     if (!connection) return null;
 
     const kind = connection.kind || 'belt';
-    const item = getConnectionCarriedItem(connection, machines);
+    const item = getConnectionCarriedItem(connection, machines, new Map(), connections);
     const typeText = kind === 'pipe' ? '管道' : '传送带';
     const contentText = kind === 'pipe' ? '液体' : '物品';
     const emptyText = kind === 'pipe' ? '暂无液体' : '暂无物品';
@@ -48,6 +48,15 @@ export const ConnectionDetailPanel = () => {
                             </Box>
                         </VStack>
                     </Dialog.Body>
+                    <Dialog.Footer justifyContent="center" pb="18px">
+                        <Button
+                            variant="outline"
+                            className="gray-btn"
+                            onClick={() => deleteConnection(connection.id)}
+                        >
+                            收纳
+                        </Button>
+                    </Dialog.Footer>
                 </Dialog.Content>
             </Dialog.Positioner>
         </Dialog.Root>
