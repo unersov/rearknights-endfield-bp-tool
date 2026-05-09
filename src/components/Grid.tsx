@@ -8,6 +8,7 @@ import classNames from 'classnames';
 import './Grid.scss';
 import { checkCollision } from '../utils/gridUtils';
 import { getRotatedDimensions, getRotatedPorts } from '../utils/machineUtils';
+import { OUTER_BUILD_MARGIN, checkPlacementRule } from '../utils/placementRules';
 
 const GRID_SIZE = 40; // 需與 CSS 中的 --grid-size 保持一致
 
@@ -40,6 +41,7 @@ export const Grid = () => {
         selectionEnd,
         selectedMachineIds,
         selectedConnectionIds,
+        selectConnection,
 
         startBatchMove,
         startCopySelection,
@@ -62,6 +64,32 @@ export const Grid = () => {
     const setMode = useGameStore(s => s.setMode);
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            const isTyping = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
+            if (!isTyping && !e.ctrlKey && !e.metaKey) {
+                const panStep = 80;
+                if (e.key.toLowerCase() === 'w') {
+                    e.preventDefault();
+                    setPan({ x: pan.x, y: pan.y + panStep });
+                    return;
+                }
+                if (e.key.toLowerCase() === 's') {
+                    e.preventDefault();
+                    setPan({ x: pan.x, y: pan.y - panStep });
+                    return;
+                }
+                if (e.key.toLowerCase() === 'a') {
+                    e.preventDefault();
+                    setPan({ x: pan.x + panStep, y: pan.y });
+                    return;
+                }
+                if (e.key.toLowerCase() === 'd') {
+                    e.preventDefault();
+                    setPan({ x: pan.x - panStep, y: pan.y });
+                    return;
+                }
+            }
+
             const isPlacing = !!useGameStore.getState().selectedMachineId;
 
             if (e.key.toLowerCase() === 'e') {
@@ -99,7 +127,7 @@ export const Grid = () => {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [mode, setMode, rotatePreview, deleteSelected, startBatchMove, cancelOperation]);
+    }, [mode, setMode, rotatePreview, deleteSelected, startBatchMove, cancelOperation, pan, setPan]);
 
     const getGridPos = (e: React.MouseEvent): Point => {
         if (!containerRef.current) return { x: 0, y: 0 };
@@ -246,9 +274,9 @@ export const Grid = () => {
         const pos = getGridPos(e);
 
         if (mode === GameMode.BUILD && selectedMachineId) {
-            addMachine(selectedMachineId, pos.x, pos.y, previewRotation);
+            const placed = addMachine(selectedMachineId, pos.x, pos.y, previewRotation);
             // 如果未按住 Ctrl，取消选择设施
-            if (!e.ctrlKey) {
+            if (placed && !e.ctrlKey) {
                 useGameStore.getState().selectMachine(null);
             }
         } else if ((mode === GameMode.WIRE || mode === GameMode.PIPE) && isWiring) {
@@ -265,6 +293,9 @@ export const Grid = () => {
     const handleContextMenu = (e: React.MouseEvent) => {
         e.preventDefault();
         useGameStore.getState().cancelOperation();
+        if (mode === GameMode.WIRE || mode === GameMode.PIPE) {
+            useGameStore.getState().setMode(GameMode.BUILD);
+        }
     };
 
     // 预览设施计算
@@ -274,6 +305,8 @@ export const Grid = () => {
     let ghostHeight = 0;
     let ghostPorts: (PortConfig & { isInput: boolean })[] = [];
     let ghostPos: Point | null = null;
+    let coveredPowerSources: { machineId: string; x: number; y: number; rotation: number; range: number }[] = [];
+    let invalidPlacementReason = '';
 
     if (ghostConfig && hoverPos) {
         ghostPos = getSingleMovePlacementPos(hoverPos);
@@ -288,11 +321,27 @@ export const Grid = () => {
             height: ghostHeight
         };
 
-        const isOutOfBounds = candidate.x < 0 || candidate.y < 0 ||
-            candidate.x + candidate.width > gridWidth ||
-            candidate.y + candidate.height > gridHeight;
+        const placement = checkPlacementRule(ghostConfig, candidate, machines, gridWidth, gridHeight, previewRotation);
+        const hasCollision = checkCollision(candidate, machines);
+        isGhostInvalid = !placement.valid || hasCollision;
+        invalidPlacementReason = placement.reason || (hasCollision ? '该位置已被占用' : '');
 
-        isGhostInvalid = isOutOfBounds || checkCollision(candidate, machines);
+        if (!ghostConfig.supplyRange && ghostConfig.power > 0) {
+            coveredPowerSources = machines.flatMap(machine => {
+                const powerConfig = FACILITIES.find(facility => facility.id === machine.machineId);
+                if (!powerConfig?.supplyRange) return [];
+                const sourceDims = getRotatedDimensions(powerConfig.width, powerConfig.height, machine.rotation);
+                const cx = machine.x + sourceDims.width / 2;
+                const cy = machine.y + sourceDims.height / 2;
+                const radius = powerConfig.supplyRange / 2;
+                const px1 = cx - radius;
+                const py1 = cy - radius;
+                const px2 = cx + radius;
+                const py2 = cy + radius;
+                const overlaps = !(candidate.x + candidate.width <= px1 || candidate.x >= px2 || candidate.y + candidate.height <= py1 || candidate.y >= py2);
+                return overlaps ? [{ machineId: machine.machineId, x: machine.x, y: machine.y, rotation: machine.rotation, range: powerConfig.supplyRange }] : [];
+            });
+        }
 
         ghostPorts = getRotatedPorts(
             [...ghostConfig.inputs, ...ghostConfig.outputs],
@@ -329,10 +378,22 @@ export const Grid = () => {
                 <div
                     className="grid-background"
                     style={{
-                        width: gridWidth * GRID_SIZE,
-                        height: gridHeight * GRID_SIZE
+                        left: -OUTER_BUILD_MARGIN * GRID_SIZE,
+                        top: -OUTER_BUILD_MARGIN * GRID_SIZE,
+                        width: (gridWidth + OUTER_BUILD_MARGIN * 2) * GRID_SIZE,
+                        height: (gridHeight + OUTER_BUILD_MARGIN * 2) * GRID_SIZE
                     }}
-                />
+                >
+                    <div
+                        className="core-boundary"
+                        style={{
+                            left: OUTER_BUILD_MARGIN * GRID_SIZE,
+                            top: OUTER_BUILD_MARGIN * GRID_SIZE,
+                            width: gridWidth * GRID_SIZE,
+                            height: gridHeight * GRID_SIZE
+                        }}
+                    />
+                </div>
 
                 {/* 連線 SVG 圖層 */}
                 <svg
@@ -340,7 +401,8 @@ export const Grid = () => {
                     style={{
                         width: gridWidth * GRID_SIZE,
                         height: gridHeight * GRID_SIZE,
-                        pointerEvents: 'none', // Ensure clicks pass through to grid
+                        overflow: 'visible',
+                        pointerEvents: 'none',
                     }}
                 >
                     {/* 已确认连接 - 外框 */}
@@ -358,6 +420,15 @@ export const Grid = () => {
                                         <polyline
                                             points={points}
                                             className={classNames('conveyor-line-fill', kind, { selected: selectedConnectionIds.includes(conn.id) })}
+                                        />
+                                        <polyline
+                                            points={points}
+                                            className="connection-hitbox"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                selectConnection(conn.id);
+                                            }}
+                                            onMouseDown={(event) => event.stopPropagation()}
                                         />
                                         {getConnectionArrows(conn.path).map(({ point, rotation }, index) => (
                                             <g
@@ -524,8 +595,26 @@ export const Grid = () => {
                                 }}
                             />
                         )}
+                        {!ghostConfig.supplyRange && ghostConfig.power > 0 && coveredPowerSources.map((source, index) => {
+                            const sourceConfig = FACILITIES.find(facility => facility.id === source.machineId);
+                            if (!sourceConfig) return null;
+                            const dims = getRotatedDimensions(sourceConfig.width, sourceConfig.height, source.rotation as 0 | 1 | 2 | 3);
+                            return (
+                                <div
+                                    key={`covered-power-${index}`}
+                                    className="power-range-preview"
+                                    style={{
+                                        left: (source.x + (dims.width / 2) - (source.range / 2)) * GRID_SIZE,
+                                        top: (source.y + (dims.height / 2) - (source.range / 2)) * GRID_SIZE,
+                                        width: source.range * GRID_SIZE,
+                                        height: source.range * GRID_SIZE
+                                    }}
+                                />
+                            );
+                        })}
                         <div
                             className={classNames('machine-ghost', { 'invalid-placement': isGhostInvalid })}
+                            title={invalidPlacementReason}
                             style={{
                                 left: ghostPos.x * GRID_SIZE,
                                 top: ghostPos.y * GRID_SIZE,
@@ -563,7 +652,7 @@ export const Grid = () => {
                             return (
                                 <div
                                     key={`ghost-arrow-${i}`}
-                                    className={classNames('ghost-arrow', isInput ? 'input-arrow' : 'output-arrow')}
+                                    className={classNames('ghost-arrow', isInput ? 'input-arrow' : 'output-arrow', { 'pipe-arrow': p.kind === 'pipe' })}
                                     style={{
                                         left: arrowX * GRID_SIZE,
                                         top: arrowY * GRID_SIZE,

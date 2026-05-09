@@ -8,6 +8,8 @@ import { useState, useEffect } from 'react';
 import { useGameStore } from './store/gameStore';
 import { BlueprintList } from './components/BlueprintList';
 import { MaterialSelector } from './components/MaterialSelector';
+import { FacilityDetailPanel } from './components/FacilityDetailPanel';
+import { ConnectionDetailPanel } from './components/ConnectionDetailPanel';
 import { About } from './components/About';
 import { SaveDialog } from './components/SaveDialog';
 import { saveBlueprint, type Blueprint, getLastBlueprintId, loadBlueprint, setLastBlueprintId } from './utils/storage';
@@ -342,6 +344,8 @@ export default function App() {
             onClose={() => { setIsSaveDialogOpen(false); setPendingSaveData(null); }}
             onSave={handleSaveAs}
           />
+          <FacilityDetailPanel />
+          <ConnectionDetailPanel />
           <MaterialSelector />
         </>
       )}

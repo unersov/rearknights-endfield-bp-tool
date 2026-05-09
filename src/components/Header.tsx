@@ -1,7 +1,6 @@
-import { Button, createListCollection, Select } from '@chakra-ui/react';
+import { Box, Button, CloseButton, createListCollection, Dialog, Flex, Input, Select, Text } from '@chakra-ui/react';
 import { ChevronDown } from 'lucide-react';
 import './Header.scss';
-import logoIcon from '../assets/logo.png';
 
 import { IconButton } from './IconButton';
 
@@ -21,23 +20,45 @@ export const Header = ({ onSave, onOpen }: HeaderProps) => {
     const { gridWidth, gridHeight, setGridSize, setUiView } = useGameStore();
     const [isShareOpen, setIsShareOpen] = useState(false);
     const [isRecipeOpen, setIsRecipeOpen] = useState(false);
+    const [isCustomSizeOpen, setIsCustomSizeOpen] = useState(false);
+    const [customWidth, setCustomWidth] = useState(String(gridWidth));
+    const [customHeight, setCustomHeight] = useState(String(gridHeight));
+    const [customSizeError, setCustomSizeError] = useState('');
 
     const gridPresetsCollection = createListCollection({
-        items: GRID_PRESETS.map(p => ({ label: p.label, value: `${p.width}x${p.height}` })),
+        items: GRID_PRESETS.map(p => ({ label: p.label, value: p.width === 0 ? 'custom' : `${p.width}x${p.height}` })),
     });
 
     const handleValueChange = (e: { value: string[] }) => {
         const val = e.value[0];
         if (!val) return;
+        if (val === 'custom') {
+            setCustomWidth(String(gridWidth));
+            setCustomHeight(String(gridHeight));
+            setCustomSizeError('');
+            setIsCustomSizeOpen(true);
+            return;
+        }
         const [w, h] = val.split('x').map(Number);
         setGridSize(w, h);
+    };
+
+    const handleApplyCustomSize = () => {
+        const width = Number(customWidth);
+        const height = Number(customHeight);
+        if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+            setCustomSizeError('宽度和高度必须是正整数');
+            return;
+        }
+        setGridSize(width, height);
+        setIsCustomSizeOpen(false);
     };
 
     return (
         <>
             <div className="header">
                 <div className="logo">
-                    <img src={logoIcon} className="icon" alt="logo" />
+                    <span className="brand-title">终末地蓝图规划</span>
                 </div>
 
                 <div className="center-actions">
@@ -75,6 +96,36 @@ export const Header = ({ onSave, onOpen }: HeaderProps) => {
             </div>
             <ShareModal isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />
             <RecipeViewer isOpen={isRecipeOpen} onClose={() => setIsRecipeOpen(false)} />
+            <Dialog.Root open={isCustomSizeOpen} onOpenChange={(event) => !event.open && setIsCustomSizeOpen(false)}>
+                <Dialog.Backdrop />
+                <Dialog.Positioner>
+                    <Dialog.Content backgroundColor="var(--gray-light)" color="var(--gray-dark)">
+                        <Dialog.CloseTrigger asChild>
+                            <CloseButton size="sm" />
+                        </Dialog.CloseTrigger>
+                        <Dialog.Header>
+                            <Dialog.Title>自定义蓝图尺寸</Dialog.Title>
+                        </Dialog.Header>
+                        <Dialog.Body>
+                            <Flex gap="12px">
+                                <Box>
+                                    <Text fontSize="sm" mb="4px">宽度</Text>
+                                    <Input value={customWidth} onChange={(event) => setCustomWidth(event.target.value)} />
+                                </Box>
+                                <Box>
+                                    <Text fontSize="sm" mb="4px">高度</Text>
+                                    <Input value={customHeight} onChange={(event) => setCustomHeight(event.target.value)} />
+                                </Box>
+                            </Flex>
+                            {customSizeError && <Text color="red.500" fontSize="sm" mt="10px">{customSizeError}</Text>}
+                        </Dialog.Body>
+                        <Dialog.Footer>
+                            <Button variant="outline" className="gray-btn" onClick={() => setIsCustomSizeOpen(false)}>取消</Button>
+                            <Button variant="outline" className="yellow-btn" onClick={handleApplyCustomSize}>应用</Button>
+                        </Dialog.Footer>
+                    </Dialog.Content>
+                </Dialog.Positioner>
+            </Dialog.Root>
         </>
     );
 };

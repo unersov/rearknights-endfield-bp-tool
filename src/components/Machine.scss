@@ -48,6 +48,10 @@
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
+    .facility-image.rotated-logistics-icon {
+        transform: translate(-50%, -50%) rotate(var(--facility-rotation));
+    }
+
     .machine-label {
         position: absolute;
         top: 100%;
@@ -110,6 +114,7 @@
     /* Reset text styles on outer */
     font-size: 0;
     z-index: 20;
+    overflow: visible;
 }
 
 /* Align inner based on side/direction */
@@ -151,6 +156,35 @@
     font-family: monospace;
     font-weight: bold;
     line-height: 1;
+    position: relative;
+}
+
+.port-item-icon {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    transform: translate(-50%, -50%);
+    z-index: 100;
+    pointer-events: none;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.55));
+}
+
+.port-number {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gray-dark);
+    font-size: 11px;
+    line-height: 1;
+    z-index: 1;
+}
+
+.port-number+svg {
+    opacity: 0.18;
 }
 
 /* SVG Arrow Styling */

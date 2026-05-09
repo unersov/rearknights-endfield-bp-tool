@@ -7,7 +7,8 @@ type MinifiedMachine = [
     number, // x
     number, // y
     number, // rotation
-    string | undefined // materialId (optional)
+    string | undefined, // materialId (optional)
+    Record<number, string> | undefined // per-output material ids
 ];
 
 type MinifiedConnection = [
@@ -61,7 +62,7 @@ const minifyBlueprint = (data: any): MinifiedBlueprint => {
 
     const machines: MinifiedMachine[] = data.machines.map((m: any) => {
         const typeIdx = machineTypes.indexOf(m.machineId);
-        return [typeIdx, m.x, m.y, m.rotation, m.selectedMaterialId];
+        return [typeIdx, m.x, m.y, m.rotation, m.selectedMaterialId, m.selectedOutputItemIds];
     });
 
     const connections: MinifiedConnection[] = data.connections.map((c: any) => {
@@ -105,7 +106,8 @@ const expandBlueprint = (data: MinifiedBlueprint): any => {
         x: m[1],
         y: m[2],
         rotation: m[3],
-        selectedMaterialId: m[4]
+        selectedMaterialId: m[4],
+        selectedOutputItemIds: m[5]
     }));
 
     const connections = data.c.map(c => {

@@ -8,7 +8,11 @@ import { useGameStore } from '../store/gameStore';
 import './Machine.scss';
 import { getRotatedDimensions, getRotatedPorts, isMachinePowered } from '../utils/machineUtils';
 import { ItemIcon } from './ItemIcon';
-import { getItemByIdIncludingDynamic } from '../utils/dynamicRecipes';
+import { canFacilityRunMultipleRecipes, findMatchingRecipeByInputs, findSatisfiedRecipesByInputs, getItemByIdIncludingDynamic, getRecipesForFacility } from '../utils/dynamicRecipes';
+import { getRecipeItemsByKind } from '../utils/recipePorts';
+import { getConnectionInputs, getConnectionOutputs, getFacilityImageId, getNearestOutputPortIndex, isLogisticsFacility, shouldRotateFacilityImage } from '../utils/facilityLogistics';
+import { isDepotBusSectionOperational, isWarehousePortOperational } from '../utils/placementRules';
+import { getConnectionCarriedItem } from '../utils/connectionContent';
 
 interface MachineProps {
     data: PlacedMachine;
@@ -17,7 +21,7 @@ interface MachineProps {
 
 export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
     const config = getFacilityConfig(data.machineId);
-    const { mode, startWiring, wiringSource, commitWiring, isWiring, zoom, pickupMachine, machines, openMaterialSelector } = useGameStore();
+    const { mode, selectedMachineId, startWiring, wiringSource, commitWiring, updateWiringPreview, isWiring, zoom, pickupMachine, machines, openFacilityDetail, openMaterialSelector } = useGameStore();
     const pressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     if (!config) return null;
@@ -25,6 +29,10 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
     const { width, height } = getRotatedDimensions(config.width, config.height, data.rotation);
     const inputs = getRotatedPorts(config.inputs, config.width, config.height, data.rotation);
     const outputs = getRotatedPorts(config.outputs, config.width, config.height, data.rotation);
+    const hidePortButtons = isLogisticsFacility(config);
+    const ignoresPower = config.id === 'fluid-pump' || config.id === 'acid-resistant-pump-mk-ii' || config.id === 'fluid-supply-unit';
+    const isOperational = isDepotBusSectionOperational(data, machines) && isWarehousePortOperational(data, machines);
+    const showUnableToWork = !ignoresPower && (!isMachinePowered(data, machines, getFacilityConfig) || !isOperational);
 
     // 检查设施是否为“窄型” (至少一个维度为 1)
     const isNarrowMachine = config.width === 1 || config.height === 1;
@@ -38,9 +46,41 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
 
     // 处理材料选择的点击事件
     const handleClick = (e: React.MouseEvent) => {
+        if (mode === GameMode.BUILD && selectedMachineId) return;
+
+        if ((mode === GameMode.WIRE || mode === GameMode.PIPE) && hidePortButtons) {
+            e.stopPropagation();
+            const kind = mode === GameMode.PIPE ? 'pipe' : 'belt';
+            const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+            const target = {
+                x: data.x + Math.floor(((e.clientX - rect.left) / rect.width) * width),
+                y: data.y + Math.floor(((e.clientY - rect.top) / rect.height) * height),
+            };
+
+            if (isWiring) {
+                const inputPorts = getConnectionInputs(config, data, kind);
+                if (inputPorts.length > 0) {
+                    updateWiringPreview(target);
+                    window.setTimeout(() => commitWiring(), 0);
+                }
+                return;
+            }
+
+            const outputIndex = getNearestOutputPortIndex(config, data, kind, target);
+            if (outputIndex !== -1) {
+                const output = getConnectionOutputs(config, data, kind)[outputIndex];
+                startWiring(data.id, outputIndex, { x: data.x + output.x, y: data.y + output.y }, kind);
+            }
+            return;
+        }
+
         if (mode === GameMode.BUILD) {
             e.stopPropagation();
-            openMaterialSelector(data.id);
+            if (config.id === 'depot-unloader' || config.id === 'fluid-tank' || config.id === 'fluid-pump' || config.id === 'acid-resistant-pump-mk-ii') {
+                openMaterialSelector(data.id);
+                return;
+            }
+            openFacilityDetail(data.id);
         }
     };
 
@@ -48,6 +88,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         // 仅允许在建造模式下拾取...
         if (e.button !== 0) return; // 仅左键点击
 
+        if (mode === GameMode.BUILD && selectedMachineId) return;
         const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
         const localX = ((e.clientX - rect.left) / rect.width) * width;
         const localY = ((e.clientY - rect.top) / rect.height) * height;
@@ -81,6 +122,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
     const modeForKind = (kind: ConnectionKind) => kind === 'pipe' ? GameMode.PIPE : GameMode.WIRE;
 
     const handleInputClick = (e: React.MouseEvent, port: PortConfig) => {
+        if (mode === GameMode.BUILD && selectedMachineId) return;
         e.stopPropagation();
         if (isWiring && mode === modeForKind(getConnectionKind(port))) {
             commitWiring();
@@ -171,6 +213,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
     };
 
     const handleOutputClick = (e: React.MouseEvent, portIndex: number, portRel: PortConfig) => {
+        if (mode === GameMode.BUILD && selectedMachineId) return;
         e.stopPropagation();
         const kind = getConnectionKind(portRel);
         if (mode === modeForKind(kind)) {
@@ -183,6 +226,41 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
 
     // 寻找选中的材料图标
     let selectedMaterial: Item | null = null;
+    const incomingConnections = useGameStore.getState().connections.filter(connection => connection.toOriginal?.machineId === data.id);
+    const getIncomingItemForPort = (portIndex: number) => {
+        const targetPort = inputs[portIndex];
+        const connection = incomingConnections.find(candidate => {
+            if (!targetPort || !candidate.toOriginal) return false;
+            const typedInput = getConnectionInputs(config, data, candidate.kind || 'belt')[candidate.toOriginal.portIndex];
+            return typedInput &&
+                typedInput.x === targetPort.x &&
+                typedInput.y === targetPort.y &&
+                typedInput.side === targetPort.side &&
+                (typedInput.kind || 'item') === (targetPort.kind || 'item');
+        });
+        return connection ? getConnectionCarriedItem(connection, machines) : undefined;
+    };
+    const incomingItemIds = inputs
+        .map((_, index) => getIncomingItemForPort(index)?.id)
+        .filter((id): id is string => Boolean(id));
+    const currentRecipe = getRecipesForFacility(config.id).find(recipe => recipe.id === data.selectedRecipeId)
+        || findMatchingRecipeByInputs(config.id, incomingItemIds)
+        || getRecipesForFacility(config.id).find(recipe => recipe.outputs.some(output => output.materialId === data.selectedMaterialId));
+    const currentRecipes = canFacilityRunMultipleRecipes(config.id)
+        ? findSatisfiedRecipesByInputs(config.id, incomingItemIds)
+        : currentRecipe ? [currentRecipe] : [];
+
+    const getPortItem = (side: 'inputs' | 'outputs', port: PortConfig, index: number) => {
+        if (side === 'inputs') return getIncomingItemForPort(index);
+        if (config.id === 'fluid-tank') return data.selectedMaterialId ? getItemByIdIncludingDynamic(data.selectedMaterialId) : undefined;
+        if (data.selectedOutputItemIds?.[index]) return getItemByIdIncludingDynamic(data.selectedOutputItemIds[index]);
+        const ports = outputs;
+        const kind = port.kind === 'pipe' ? 'pipe' : 'item';
+        const sameKindIndex = ports.slice(0, index + 1).filter(candidate => (candidate.kind === 'pipe' ? 'pipe' : 'item') === kind).length - 1;
+        const matchedItems = currentRecipes.flatMap(recipe => getRecipeItemsByKind(recipe, side, kind));
+        return matchedItems[sameKindIndex];
+    };
+
     if (data.selectedMaterialId) {
         const mat = getItemByIdIncludingDynamic(data.selectedMaterialId);
         if (mat) {
@@ -203,9 +281,10 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         >
             <div className="machine-body">
                 <img
-                    className="facility-image"
-                    src={new URL(`../assets/facilities/${config.id}.webp`, import.meta.url).href}
+                    className={classNames('facility-image', { 'rotated-logistics-icon': shouldRotateFacilityImage(config.id) })}
+                    src={new URL(`../assets/facilities/${getFacilityImageId(config.id)}.webp`, import.meta.url).href}
                     alt={config.name}
+                    style={shouldRotateFacilityImage(config.id) ? { '--facility-rotation': `${data.rotation * 90}deg` } as React.CSSProperties : undefined}
                 />
 
                 <div
@@ -220,7 +299,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                     <div>[长按] 移动</div>
                 </div>
 
-                {(!isMachinePowered(data, machines, getFacilityConfig)) && (
+                {showUnableToWork && (
                     <div
                         className="power-alert-icon"
                         style={{
@@ -233,7 +312,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                             alignItems: 'center',
                             justifyContent: 'center'
                         }}
-                        title="缺电"
+                        title={!isOperational ? '无法工作' : '缺电'}
                     >
                         <Icon
                             icon="uil:battery-bolt"
@@ -269,8 +348,9 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
 
 
                 {/* 输入 */}
-                {inputs.map((p, i) => {
+                {!hidePortButtons && inputs.map((p, i) => {
                     const isConnectable = isWiring && mode === modeForKind(getConnectionKind(p));
+                    const portItem = getPortItem('inputs', p, i);
 
                     return (
                         <div
@@ -285,13 +365,15 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                             <div className="port-inner">
                                 <Icon icon="octicon:chevron-right-12" width="24" height="24" strokeWidth="3" />
                             </div>
+                            {portItem && <div className="port-item-icon"><ItemIcon item={portItem} size={18} showRarityBorder={false} /></div>}
                         </div>
                     );
                 })}
 
                 {/* 输出 */}
-                {outputs.map((p, i) => {
+                {!hidePortButtons && outputs.map((p, i) => {
                     const isConnectable = mode === modeForKind(getConnectionKind(p));
+                    const portItem = p.kind === 'pipe' ? getPortItem('outputs', p, i) : undefined;
 
                     return (
                         <div
@@ -305,8 +387,10 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                             title={isConnectable ? "点击开始连接" : ""}
                         >
                             <div className="port-inner">
+                                {config.id === 'automation-core' && <span className="port-number">{i + 1}</span>}
                                 <Icon icon="octicon:chevron-right-12" width="24" height="24" strokeWidth="3" />
                             </div>
+                            {portItem && <div className="port-item-icon"><ItemIcon item={portItem} size={18} showRarityBorder={false} /></div>}
                         </div>
                     );
                 })}

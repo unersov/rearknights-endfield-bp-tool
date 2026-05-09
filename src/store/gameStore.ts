@@ -4,7 +4,10 @@ import type { Connection, ConnectionKind, PlacedMachine, Point, Direction, Side 
 import { FACILITIES } from '../config/facilities';
 import { checkCollision, findPath } from '../utils/gridUtils';
 import { getRotatedDimensions, getRotatedPorts } from '../utils/machineUtils';
-import { findMatchingRecipeByInputs } from '../utils/dynamicRecipes';
+import { canFacilityRunMultipleRecipes, findMatchingRecipeByInputs, findSatisfiedRecipesByInputs, getItemByIdIncludingDynamic, getPreferredRecipeOutput, getRecipesForFacility } from '../utils/dynamicRecipes';
+import { getConnectionInputs, getConnectionOutputs, getNearestInputPortIndex, getNearestOutputPortIndex, isBridgeForKind, isLogisticsFacility } from '../utils/facilityLogistics';
+import { checkPlacementRule, isRectInsideCore, isRectInsideExpandedBounds } from '../utils/placementRules';
+import { getConnectionCarriedItem } from '../utils/connectionContent';
 
 interface HistorySnapshot {
     machines: PlacedMachine[];
@@ -44,6 +47,7 @@ interface GameState {
     selectionEnd: Point | null;
     selectedMachineIds: string[];
     selectedConnectionIds: string[];
+    connectionDetailId: string | null;
 
     moveAnchor: Point | null;
     movingMachinesSnapshot: PlacedMachine[];
@@ -54,6 +58,7 @@ interface GameState {
     uiView: 'list' | 'editor' | 'about' | 'settings';
     blueprintListMode: 'manage' | 'insert';
     materialSelectorMachineId: string | null;
+    materialSelectorOutputIndex: number | null;
 
     // History
     history: {
@@ -69,7 +74,7 @@ interface GameState {
     setMode: (mode: GameMode) => void;
     selectMachine: (machineId: string | null) => void;
     rotatePreview: () => void;
-    addMachine: (machineId: string, x: number, y: number, rotation: Direction) => void;
+    addMachine: (machineId: string, x: number, y: number, rotation: Direction) => boolean;
     removeMachine: (instanceId: string) => void;
     pickupMachine: (instanceId: string, grabOffset?: Point) => void;
     cancelOperation: () => void; // Cancels wiring or placement/move
@@ -79,6 +84,7 @@ interface GameState {
     setBoxSelection: (start: Point | null, end: Point | null) => void;
     commitBoxSelection: (isToggle?: boolean) => void;
     clearSelection: () => void;
+    selectConnection: (connectionId: string) => void;
     deleteSelected: () => void;
 
     // Batch Move Actions
@@ -92,9 +98,13 @@ interface GameState {
     startInsertBlueprint: (blueprint: { data: { machines: any[], connections: any[] } }) => void;
 
     // Material Selection Actions
-    openMaterialSelector: (machineInstanceId: string) => void;
+    facilityDetailMachineId: string | null;
+    openFacilityDetail: (machineInstanceId: string) => void;
+    closeFacilityDetail: () => void;
+    openMaterialSelector: (machineInstanceId: string, outputIndex?: number | null) => void;
     closeMaterialSelector: () => void;
-    setMachineMaterial: (instanceId: string, materialId: string) => void;
+    setMachineMaterial: (instanceId: string, materialId: string, outputIndex?: number | null) => void;
+    setMachineRecipe: (instanceId: string, recipeId: string) => void;
 
     // Blueprint Actions
     currentBlueprintId: string | null;
@@ -113,6 +123,16 @@ interface GameState {
     setPan: (pan: Point) => void;
 }
 
+const isPointOnBridge = (point: Point, machines: PlacedMachine[], kind: ConnectionKind) =>
+    machines.some(machine => machine.x === point.x && machine.y === point.y && isBridgeForKind(machine.machineId, kind));
+
+const isConnectionPointAllowed = (point: Point, kind: ConnectionKind, gridWidth: number, gridHeight: number) => {
+    const rect = { x: point.x, y: point.y, width: 1, height: 1 };
+    return kind === 'pipe'
+        ? isRectInsideExpandedBounds(rect, gridWidth, gridHeight)
+        : isRectInsideCore(rect, gridWidth, gridHeight);
+};
+
 const deriveAutoRecipeProducts = (machines: PlacedMachine[], connections: Connection[]) => {
     let nextMachines = machines;
     let changed = false;
@@ -130,19 +150,39 @@ const deriveAutoRecipeProducts = (machines: PlacedMachine[], connections: Connec
     while (passChanged && passCount < machines.length + 1) {
         passCount += 1;
         passChanged = false;
+        const inputIdsByMachine = new Map<string, string[]>();
 
         for (const machine of nextMachines) {
             const incoming = incomingByMachine.get(machine.id);
             if (!incoming || incoming.length === 0) continue;
 
-            const inputItemIds = incoming.map(connection => {
-                const source = nextMachines.find(candidate => candidate.id === connection.fromOriginal.machineId);
-                return source?.selectedMaterialId;
-            });
+            const inputItemIds = incoming
+                .map(connection => getConnectionCarriedItem(connection, nextMachines, inputIdsByMachine)?.id)
+                .filter((id): id is string => Boolean(id));
+            inputIdsByMachine.set(machine.id, inputItemIds);
 
-            const nextMaterialId = inputItemIds.every(Boolean)
-                ? findMatchingRecipeByInputs(machine.machineId, inputItemIds as string[])?.outputs[0]?.materialId
+            if (machine.machineId === 'fluid-tank') {
+                const incomingLiquidId = inputItemIds.find(id => getItemByIdIncludingDynamic(id)?.state === 'liquid');
+                if (incomingLiquidId && (!machine.selectedMaterialId || machine.selectedMaterialId === incomingLiquidId)) {
+                    if (machine.selectedMaterialId === incomingLiquidId) continue;
+                    changed = true;
+                    passChanged = true;
+                    nextMachines = nextMachines.map(candidate =>
+                        candidate.id === machine.id ? { ...candidate, selectedMaterialId: incomingLiquidId } : candidate
+                    );
+                }
+                continue;
+            }
+
+            const matchedRecipe = inputItemIds.length === incoming.length
+                ? findMatchingRecipeByInputs(machine.machineId, inputItemIds)
                 : undefined;
+            const satisfiedRecipes = canFacilityRunMultipleRecipes(machine.machineId)
+                ? findSatisfiedRecipesByInputs(machine.machineId, inputItemIds)
+                : [];
+            const nextMaterialId = satisfiedRecipes.length > 0
+                ? getPreferredRecipeOutput(satisfiedRecipes[0])?.id
+                : matchedRecipe ? getPreferredRecipeOutput(matchedRecipe)?.id : undefined;
 
             if (machine.selectedMaterialId === nextMaterialId) continue;
 
@@ -170,6 +210,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     selectionEnd: null,
     selectedMachineIds: [],
     selectedConnectionIds: [],
+    connectionDetailId: null,
 
     moveAnchor: null,
     movingMachinesSnapshot: [],
@@ -179,6 +220,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     uiView: 'editor',
     blueprintListMode: 'manage',
     materialSelectorMachineId: null,
+    materialSelectorOutputIndex: null,
+    facilityDetailMachineId: null,
 
     history: {
         past: [],
@@ -194,8 +237,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     zoom: 1,
     pan: { x: 0, y: 0 },
-    gridWidth: 24,
-    gridHeight: 24,
+    gridWidth: 200,
+    gridHeight: 200,
 
     currentBlueprintId: null,
     currentBlueprintName: null,
@@ -212,7 +255,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 movingMachineGrabOffset: null
             }));
         }
-        set({ selectedMachineId: machineId, mode: GameMode.BUILD, previewRotation: 0 });
+        set({ selectedMachineId: machineId, mode: GameMode.BUILD, previewRotation: 0, connectionDetailId: null, selectedConnectionIds: [] });
     },
     rotatePreview: () => set(state => {
         const nextRotation = (state.previewRotation + 1) % 4 as Direction;
@@ -319,7 +362,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     addMachine: (machineId, x, y, rotation) => {
         const config = FACILITIES.find(m => m.id === machineId);
-        if (!config) return;
+        if (!config) return false;
 
         const { movingMachineBackup, movingMachineGrabOffset } = get();
         const placeX = movingMachineBackup && movingMachineGrabOffset ? Math.round(x - movingMachineGrabOffset.x) : x;
@@ -336,16 +379,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         const currentMachines = get().machines;
 
-        // Boundary Check
-        if (candidateRect.x < 0 || candidateRect.y < 0 ||
-            candidateRect.x + candidateRect.width > get().gridWidth ||
-            candidateRect.y + candidateRect.height > get().gridHeight) {
-            return;
+        const placement = checkPlacementRule(config, candidateRect, currentMachines, get().gridWidth, get().gridHeight, rotation);
+        if (!placement.valid) {
+            return false;
         }
 
         if (checkCollision(candidateRect, currentMachines)) {
             // Collision detected, do not place
-            return;
+            return false;
         }
 
         let finalId: any = crypto.randomUUID();
@@ -367,7 +408,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             rotation,
         };
 
-        let oldInputLocations = new Set<string>();
+        const oldInputLocations = new Set<string>();
         if (shouldClearConnections && movingMachineBackup) {
             const config = FACILITIES.find(m => m.id === movingMachineBackup.machineId);
             if (config) {
@@ -406,6 +447,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 movingMachineGrabOffset: null
             };
         });
+        return true;
     },
 
     removeMachine: (instanceId) => {
@@ -415,7 +457,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             const nextConnections = state.connections.filter(c => c.fromOriginal.machineId !== instanceId && c.toOriginal?.machineId !== instanceId);
             return {
                 machines: deriveAutoRecipeProducts(nextMachines, nextConnections),
-                connections: nextConnections
+                connections: nextConnections,
+                connectionDetailId: nextConnections.some(connection => connection.id === state.connectionDetailId) ? state.connectionDetailId : null
             };
         });
     },
@@ -458,7 +501,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         // Handle Box Select / Batch Move Cancel
         const { mode, movingMachinesSnapshot, movingConnectionsSnapshot } = get();
         if (mode === GameMode.BOX_SELECT) {
-            set({ selectionStart: null, selectionEnd: null, selectedMachineIds: [], selectedConnectionIds: [], mode: GameMode.BUILD });
+            set({ selectionStart: null, selectionEnd: null, selectedMachineIds: [], selectedConnectionIds: [], connectionDetailId: null, mode: GameMode.BUILD });
         }
         if (mode === GameMode.MOVE_SELECTION) {
             const { isCopying: wasCopying } = get();
@@ -511,22 +554,41 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     updateWiringPreview: (mouseGridPos) => {
-        const { wiringSource, machines, wiringFixedPath, wiringKind, connections } = get();
+        const { wiringSource, machines, wiringFixedPath, wiringKind, connections, gridWidth, gridHeight } = get();
         if (!wiringSource || wiringFixedPath.length === 0) return;
 
-        const start = wiringFixedPath[wiringFixedPath.length - 1]; // Start from last anchor
-        const end = mouseGridPos;
+        let activeSource = wiringSource;
+        let activeFixedPath = wiringFixedPath;
+        if (wiringFixedPath.length === 1) {
+            const sourceMachine = machines.find(m => m.id === wiringSource.machineId);
+            const sourceConfig = sourceMachine ? FACILITIES.find(m => m.id === sourceMachine.machineId) : undefined;
+            if (sourceMachine && sourceConfig && isLogisticsFacility(sourceConfig)) {
+                const nearestOutputIndex = getNearestOutputPortIndex(sourceConfig, sourceMachine, wiringKind, mouseGridPos);
+                const output = nearestOutputIndex !== -1 ? getConnectionOutputs(sourceConfig, sourceMachine, wiringKind)[nearestOutputIndex] : undefined;
+                if (output) {
+                    activeSource = {
+                        machineId: wiringSource.machineId,
+                        portIndex: nearestOutputIndex,
+                        absolutePos: { x: sourceMachine.x + output.x, y: sourceMachine.y + output.y },
+                    };
+                    activeFixedPath = [activeSource.absolutePos];
+                }
+            }
+        }
+
+        const start = activeFixedPath[activeFixedPath.length - 1]; // Start from last anchor
+        let end = mouseGridPos;
 
         // Determine Start Side (only matters if we are at the very beginning of the whole path)
         let startSide: Side | undefined;
         if (wiringFixedPath.length === 1) { // Only first point
-            const sourceMachine = machines.find(m => m.id === wiringSource.machineId);
+            const sourceMachine = machines.find(m => m.id === activeSource.machineId);
             if (sourceMachine) {
                 const config = FACILITIES.find(m => m.id === sourceMachine.machineId);
                 if (config) {
-                    const outputs = getRotatedPorts(config.outputs, config.width, config.height, sourceMachine.rotation);
-                    if (outputs[wiringSource.portIndex]) {
-                        startSide = outputs[wiringSource.portIndex].side;
+                    const outputs = getConnectionOutputs(config, sourceMachine, wiringKind);
+                    if (outputs[activeSource.portIndex]) {
+                        startSide = outputs[activeSource.portIndex].side;
                     }
                 }
             }
@@ -540,7 +602,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             const config = FACILITIES.find(mc => mc.id === m.machineId);
             if (!config) continue;
 
-            const inputs = getRotatedPorts(config.inputs, config.width, config.height, m.rotation);
+            const inputs = getConnectionInputs(config, m, wiringKind);
             inputs.forEach((p) => {
                 const absX = m.x + p.x;
                 const absY = m.y + p.y;
@@ -550,34 +612,52 @@ export const useGameStore = create<GameState>((set, get) => ({
                     isMatchingInput = true;
                 }
             });
+            if (!isMatchingInput) {
+                const dims = getRotatedDimensions(config.width, config.height, m.rotation);
+                const isInside = end.x >= m.x && end.x < m.x + dims.width && end.y >= m.y && end.y < m.y + dims.height;
+                if (isInside) {
+                    const inputIndex = getNearestInputPortIndex(config, m, wiringKind, mouseGridPos);
+                    const input = inputIndex !== -1 ? inputs[inputIndex] : undefined;
+                    if (input) {
+                        end = { x: m.x + input.x, y: m.y + input.y };
+                        endSide = input.side;
+                        isMatchingInput = true;
+                    }
+                }
+            }
         }
 
-        const segmentPath = findPath(start, end, machines, startSide, endSide);
+        const segmentPath = findPath(start, end, machines, startSide, endSide, wiringKind);
 
         if (segmentPath) {
             const cleanSegment = segmentPath.length > 0 ? segmentPath.slice(1) : [];
-            const previewPath = [...wiringFixedPath, ...cleanSegment];
+            const previewPath = [...activeFixedPath, ...cleanSegment];
             const occupied = new Set<string>();
             connections
                 .filter(conn => (conn.kind || 'belt') === wiringKind)
                 .forEach(conn => conn.path.forEach(p => occupied.add(`${p.x},${p.y}`)));
-            const hasOverlap = previewPath.some(p => occupied.has(`${p.x},${p.y}`));
+            const hasOverlap = previewPath.some(p => occupied.has(`${p.x},${p.y}`) && !isPointOnBridge(p, machines, wiringKind));
+            const isInAllowedBounds = previewPath.every(p => isConnectionPointAllowed(p, wiringKind, gridWidth, gridHeight));
             set({
+                wiringSource: activeSource,
+                wiringFixedPath: activeFixedPath,
                 wiringPreviewPath: previewPath,
-                isWiringValid: isMatchingInput && !hasOverlap
+                isWiringValid: isMatchingInput && !hasOverlap && isInAllowedBounds
             });
         } else {
             // Invalid path - Show straight line but flag as invalid
             // We want to show a straight line to indicating intent, but red?
             set({
-                wiringPreviewPath: [...wiringFixedPath, end],
+                wiringSource: activeSource,
+                wiringFixedPath: activeFixedPath,
+                wiringPreviewPath: [...activeFixedPath, end],
                 isWiringValid: false
             });
         }
     },
 
     addWiringAnchor: (pos) => {
-        const { wiringSource, machines, wiringFixedPath, wiringKind, connections } = get();
+        const { wiringSource, machines, wiringFixedPath, wiringKind, connections, gridWidth, gridHeight } = get();
         if (!wiringSource || wiringFixedPath.length === 0) return;
 
         const start = wiringFixedPath[wiringFixedPath.length - 1];
@@ -590,7 +670,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             if (sourceMachine) {
                 const config = FACILITIES.find(m => m.id === sourceMachine.machineId);
                 if (config) {
-                    const outputs = getRotatedPorts(config.outputs, config.width, config.height, sourceMachine.rotation);
+                    const outputs = getConnectionOutputs(config, sourceMachine, wiringKind);
                     if (outputs[wiringSource.portIndex]) {
                         startSide = outputs[wiringSource.portIndex].side;
                     }
@@ -598,7 +678,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             }
         }
 
-        const segmentPath = findPath(start, end, machines, startSide, undefined);
+        const segmentPath = findPath(start, end, machines, startSide, undefined, wiringKind);
 
         if (segmentPath) {
             const cleanSegment = segmentPath.length > 0 ? segmentPath.slice(1) : [];
@@ -607,7 +687,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             connections
                 .filter(conn => (conn.kind || 'belt') === wiringKind)
                 .forEach(conn => conn.path.forEach(p => occupied.add(`${p.x},${p.y}`)));
-            if (!nextPath.some(p => occupied.has(`${p.x},${p.y}`))) {
+            if (!nextPath.some(p => occupied.has(`${p.x},${p.y}`) && !isPointOnBridge(p, machines, wiringKind)) &&
+                nextPath.every(p => isConnectionPointAllowed(p, wiringKind, gridWidth, gridHeight))) {
                 set({ wiringFixedPath: nextPath });
             }
         } else {
@@ -632,7 +713,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             const config = FACILITIES.find(mc => mc.id === m.machineId);
             if (!config) continue;
 
-            const inputs = getRotatedPorts(config.inputs, config.width, config.height, m.rotation);
+            const inputs = getConnectionInputs(config, m, wiringKind);
             // Check if end matches any input
             const portIndex = inputs.findIndex(p => {
                 const absX = m.x + p.x;
@@ -753,12 +834,19 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
             selectedMachineIds: finalMachineIds,
             selectedConnectionIds: finalConnectionIds,
+            connectionDetailId: null,
             selectionStart: null,
             selectionEnd: null
         });
     },
 
-    clearSelection: () => set({ selectedMachineIds: [], selectedConnectionIds: [] }),
+    clearSelection: () => set({ selectedMachineIds: [], selectedConnectionIds: [], connectionDetailId: null }),
+
+    selectConnection: (connectionId) => set({
+        selectedMachineIds: [],
+        selectedConnectionIds: [connectionId],
+        connectionDetailId: connectionId,
+    }),
 
     deleteSelected: () => {
         // Reuse remove logic? 
@@ -787,24 +875,55 @@ export const useGameStore = create<GameState>((set, get) => ({
             machines: deriveAutoRecipeProducts(newMachines, newConnections),
             connections: newConnections,
             selectedMachineIds: [],
-            selectedConnectionIds: []
+            selectedConnectionIds: [],
+            connectionDetailId: null
         });
     },
 
     setUiView: (view) => set({ uiView: view }),
     setBlueprintListMode: (mode) => set({ blueprintListMode: mode }),
 
-    openMaterialSelector: (machineInstanceId) => set({ materialSelectorMachineId: machineInstanceId }),
-    closeMaterialSelector: () => set({ materialSelectorMachineId: null }),
-    setMachineMaterial: (instanceId, materialId) => {
+    openFacilityDetail: (machineInstanceId) => set({ facilityDetailMachineId: machineInstanceId }),
+    closeFacilityDetail: () => set({ facilityDetailMachineId: null }),
+    openMaterialSelector: (machineInstanceId, outputIndex = null) => set({ materialSelectorMachineId: machineInstanceId, materialSelectorOutputIndex: outputIndex }),
+    closeMaterialSelector: () => set({ materialSelectorMachineId: null, materialSelectorOutputIndex: null }),
+    setMachineMaterial: (instanceId, materialId, outputIndex = null) => {
         get().takeSnapshot();
         set(state => {
-            const manuallyUpdatedMachines = state.machines.map(m => m.id === instanceId ? { ...m, selectedMaterialId: materialId } : m);
+            const manuallyUpdatedMachines = state.machines.map(m => {
+                if (m.id !== instanceId) return m;
+                if (outputIndex !== null && outputIndex !== undefined) {
+                    return {
+                        ...m,
+                        selectedOutputItemIds: {
+                            ...(m.selectedOutputItemIds || {}),
+                            [outputIndex]: materialId,
+                        }
+                    };
+                }
+                return { ...m, selectedMaterialId: materialId };
+            });
             return {
                 machines: deriveAutoRecipeProducts(manuallyUpdatedMachines, state.connections),
-                materialSelectorMachineId: null
+                materialSelectorMachineId: null,
+                materialSelectorOutputIndex: null
             };
         });
+    },
+    setMachineRecipe: (instanceId, recipeId) => {
+        const recipe = getRecipesForFacility(get().machines.find(machine => machine.id === instanceId)?.machineId || '')
+            .find(candidate => candidate.id === recipeId);
+        get().takeSnapshot();
+        set(state => ({
+            machines: state.machines.map(machine => machine.id === instanceId
+                ? {
+                    ...machine,
+                    selectedRecipeId: recipeId,
+                    selectedMaterialId: recipe ? getPreferredRecipeOutput(recipe)?.id : machine.selectedMaterialId,
+                }
+                : machine
+            )
+        }));
     },
 
     startInsertBlueprint: (blueprint) => {
@@ -938,6 +1057,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             // Usually we clear selection while moving, then re-select on place.
             selectedMachineIds: [],
             selectedConnectionIds: [],
+            connectionDetailId: null,
             isCopying: false
         });
     },
@@ -1073,8 +1193,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             const { width, height } = getRotatedDimensions(config.width, config.height, m.rotation);
             const rect = { x: m.x, y: m.y, width, height };
 
-            // Boundary
-            if (rect.x < 0 || rect.y < 0 || rect.x + width > gridWidth || rect.y + height > gridHeight) {
+            const placement = checkPlacementRule(config, rect, machines, gridWidth, gridHeight, m.rotation);
+            if (!placement.valid) {
                 collision = true;
                 break;
             }
@@ -1109,6 +1229,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             mode: GameMode.BOX_SELECT, // Return to box select?
             selectedMachineIds: placedMachines.map(m => m.id),
             selectedConnectionIds: placedConnections.map(c => c.id),
+            connectionDetailId: null,
             isCopying: false
         });
     },
@@ -1133,6 +1254,9 @@ export const useGameStore = create<GameState>((set, get) => ({
             selectedMachineId: null,
             movingMachineBackup: null,
             movingMachineGrabOffset: null,
+            selectedMachineIds: [],
+            selectedConnectionIds: [],
+            connectionDetailId: null,
             history: { past: [], future: [] }
         });
     },
@@ -1143,12 +1267,17 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
             machines: [],
             connections: [],
+            gridWidth: 200,
+            gridHeight: 200,
             currentBlueprintId: null,
             currentBlueprintName: null,
             mode: GameMode.BUILD,
             selectedMachineId: null,
             movingMachineBackup: null,
             movingMachineGrabOffset: null,
+            selectedMachineIds: [],
+            selectedConnectionIds: [],
+            connectionDetailId: null,
             history: { past: [], future: [] }
         });
     }

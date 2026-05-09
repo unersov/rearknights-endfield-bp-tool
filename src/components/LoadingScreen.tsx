@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import './LoadingScreen.scss';
-import loadingImg from '../assets/loading.png';
 
 interface LoadingScreenProps {
     onComplete: () => void;
@@ -84,8 +83,8 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ onComplete }) => {
                 </div>
 
                 <div className="right-section">
-                    <img src={loadingImg} alt="加载中" className="loading-img" />
-                    <div className="sub-text">终末地蓝图工具</div>
+                    <div className="loading-brand">终末地蓝图规划</div>
+                    <div className="sub-text">本地蓝图规划工具</div>
                 </div>
             </div>
         </div>

@@ -17,10 +17,11 @@
         align-items: center;
         gap: 10px;
 
-        .icon {
-            height: 48px;
-            border-radius: 24%;
-            object-fit: contain;
+        .brand-title {
+            color: var(--gray-dark);
+            font-size: 20px;
+            line-height: 1;
+            white-space: nowrap;
         }
     }
 

@@ -20,6 +20,9 @@ export const getBottleItems = (): Item[] =>
 export const getLiquidItems = (): Item[] =>
     Object.values(ITEMS).filter(item => item.state === 'liquid');
 
+export const getNonLiquidItems = (): Item[] =>
+    Object.values(ITEMS).filter(item => item.state !== 'liquid');
+
 export const getFilledBottleItemId = (bottleId: string, liquidId: string) =>
     `${bottleId}${DYNAMIC_ID_SEPARATOR}${liquidId}`;
 
@@ -160,6 +163,49 @@ export const getRecipeOutputItemsForFacility = (facilityId: string): Item[] => {
     return [...unique.values()];
 };
 
+export const getManualSelectableItemsForFacility = (facilityId: string): Item[] => {
+    if (facilityId === 'fluid-tank') return getLiquidItems();
+    if (facilityId === 'fluid-pump' || facilityId === 'acid-resistant-pump-mk-ii') return getRecipeOutputItemsForFacility(facilityId).filter(item => item.state === 'liquid');
+    if (canFacilityRunMultipleRecipes(facilityId)) {
+        const unique = new Map<string, Item>();
+        getRecipesForFacility(facilityId).forEach(recipe => {
+            [...recipe.inputs, ...recipe.outputs].forEach(entry => {
+                const item = getItemByIdIncludingDynamic(entry.materialId);
+                if (item?.state === 'liquid') unique.set(item.id, item);
+            });
+        });
+        return [...unique.values()];
+    }
+    if (facilityId === 'automation-core' || facilityId === 'depot-unloader') {
+        const unique = new Map<string, Item>();
+        [...getNonLiquidItems(), ...getFilledBottleItems()].forEach(item => unique.set(item.id, item));
+        return [...unique.values()];
+    }
+    return [];
+};
+
+export const canFacilityManuallySelectOutput = (facilityId: string) =>
+    facilityId === 'automation-core' || facilityId === 'depot-unloader' || facilityId === 'fluid-tank' || facilityId === 'fluid-pump' || facilityId === 'acid-resistant-pump-mk-ii' || canFacilityRunMultipleRecipes(facilityId);
+
+const outputPriority = (item: Item, preferLiquid: boolean) => {
+    const wasteRank: Record<string, number> = {
+        xircon_effluent: preferLiquid ? 2 : 3,
+        inert_xirconn_effluent: preferLiquid ? 3 : 4,
+        sewage: preferLiquid ? 4 : 5,
+    };
+    if (item.id in wasteRank) return wasteRank[item.id];
+    if (preferLiquid) return item.state === 'liquid' ? 1 : 6;
+    return item.state !== 'liquid' ? 1 : 2;
+};
+
+export const getPreferredRecipeOutput = (recipe: Recipe): Item | undefined => {
+    const preferLiquid = recipe.machineId === 'separating-unit';
+    return recipe.outputs
+        .map(output => getItemByIdIncludingDynamic(output.materialId))
+        .filter((item): item is Item => Boolean(item))
+        .sort((a, b) => outputPriority(a, preferLiquid) - outputPriority(b, preferLiquid))[0];
+};
+
 const normalizeInputIds = (ids: string[]) => ids.slice().sort().join('|');
 
 export const findMatchingRecipeByInputs = (facilityId: string, inputItemIds: string[]): Recipe | undefined => {
@@ -172,3 +218,17 @@ export const findMatchingRecipeByInputs = (facilityId: string, inputItemIds: str
         return normalizeInputIds(recipe.inputs.map(input => input.materialId as string)) === inputKey;
     });
 };
+
+export const findSatisfiedRecipesByInputs = (facilityId: string, inputItemIds: string[]): Recipe[] => {
+    if (inputItemIds.length === 0) return [];
+    const inputSet = new Set(inputItemIds);
+
+    return getRecipesForFacility(facilityId).filter(recipe => {
+        if (recipe.inputs.length === 0 || recipe.outputs.length === 0) return false;
+        if (recipe.inputs.some(input => !input.materialId)) return false;
+        return recipe.inputs.every(input => inputSet.has(input.materialId as string));
+    });
+};
+
+export const canFacilityRunMultipleRecipes = (facilityId: string) =>
+    facilityId === 'reactor-crucible' || facilityId === 'expanded-crucible';

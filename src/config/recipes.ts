@@ -3,6 +3,76 @@ import type { Recipe } from '../types';
 // Generated from docs/info2update_formula.csv. Do not edit recipe rows by hand.
 export const RECIPES: Recipe[] = [
   {
+    "id": "fluid-pump_recipe_1",
+    "name": "水泵：→ 清水",
+    "machineId": "fluid-pump",
+    "durationSeconds": 1,
+    "inputs": [],
+    "outputs": [
+      {
+        "materialId": "clean_water",
+        "name": "清水",
+        "amount": 1
+      }
+    ]
+  },
+  {
+    "id": "acid-resistant-pump-mk-ii_recipe_1",
+    "name": "二型耐酸水泵：→ 清水",
+    "machineId": "acid-resistant-pump-mk-ii",
+    "durationSeconds": 1,
+    "inputs": [],
+    "outputs": [
+      {
+        "materialId": "clean_water",
+        "name": "清水",
+        "amount": 1
+      }
+    ]
+  },
+  {
+    "id": "acid-resistant-pump-mk-ii_recipe_2",
+    "name": "二型耐酸水泵：→ 沉积酸",
+    "machineId": "acid-resistant-pump-mk-ii",
+    "durationSeconds": 1,
+    "inputs": [],
+    "outputs": [
+      {
+        "materialId": "precipitation_acid",
+        "name": "沉积酸",
+        "amount": 1
+      }
+    ]
+  },
+  {
+    "id": "fluid-supply-unit_recipe_1",
+    "name": "给水器：清水 →",
+    "machineId": "fluid-supply-unit",
+    "durationSeconds": 1,
+    "inputs": [
+      {
+        "materialId": "clean_water",
+        "name": "清水",
+        "amount": 1
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "id": "fluid-supply-unit_recipe_2",
+    "name": "给水器：沉积酸 →",
+    "machineId": "fluid-supply-unit",
+    "durationSeconds": 1,
+    "inputs": [
+      {
+        "materialId": "precipitation_acid",
+        "name": "沉积酸",
+        "amount": 1
+      }
+    ],
+    "outputs": []
+  },
+  {
     "id": "filling-unit_recipe_1_1",
     "name": "灌装机：*瓶子、*液体 → *瓶子(*液体)",
     "machineId": "filling-unit",

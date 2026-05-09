@@ -1,7 +1,8 @@
-import type { Point, PlacedMachine } from '../types';
+import type { ConnectionKind, Point, PlacedMachine } from '../types';
 import { FACILITIES } from '../config/facilities';
 
 import { getRotatedDimensions } from './machineUtils';
+import { canFacilityActAsConnectionNode } from './facilityLogistics';
 
 // Helper to get machine rect
 export const getMachineRect = (machine: PlacedMachine) => {
@@ -73,7 +74,8 @@ export const findPath = (
     end: Point,
     machines: PlacedMachine[],
     startSide?: 'top' | 'right' | 'bottom' | 'left',
-    endSide?: 'top' | 'right' | 'bottom' | 'left'
+    endSide?: 'top' | 'right' | 'bottom' | 'left',
+    kind?: ConnectionKind
 ): Point[] | null => {
 
     // Quick check: if start == end
@@ -126,6 +128,9 @@ export const findPath = (
             // Machine occupies [x, x+w) and [y, y+h)
             if (x >= m.x && x < m.x + width &&
                 y >= m.y && y < m.y + height) {
+                if (kind && canFacilityActAsConnectionNode(m.machineId, kind)) {
+                    return false;
+                }
                 return true;
             }
         }

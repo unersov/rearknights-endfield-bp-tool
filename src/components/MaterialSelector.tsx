@@ -3,10 +3,12 @@ import { useGameStore } from '../store/gameStore';
 import { getFacilityConfig } from '../config/facilities';
 import { Dialog, Grid, VStack, Box, Text, CloseButton, Flex, Input } from '@chakra-ui/react';
 import { ItemIcon } from './ItemIcon';
-import { getRecipeOutputItemsForFacility } from '../utils/dynamicRecipes';
+import { canFacilityRunMultipleRecipes, canFacilityManuallySelectOutput, findSatisfiedRecipesByInputs, getManualSelectableItemsForFacility } from '../utils/dynamicRecipes';
+import { getRecipeItemsByKind } from '../utils/recipePorts';
+import { getConnectionCarriedItem } from '../utils/connectionContent';
 
 export const MaterialSelector: React.FC = () => {
-    const { materialSelectorMachineId, machines, closeMaterialSelector, setMachineMaterial } = useGameStore();
+    const { materialSelectorMachineId, materialSelectorOutputIndex, machines, connections, closeMaterialSelector, setMachineMaterial } = useGameStore();
     const [query, setQuery] = React.useState('');
 
     const machine = materialSelectorMachineId ? machines.find(m => m.id === materialSelectorMachineId) : null;
@@ -16,13 +18,32 @@ export const MaterialSelector: React.FC = () => {
 
     const handleSelect = (materialId: string) => {
         if (machine) {
-            setMachineMaterial(machine.id, materialId);
+            setMachineMaterial(machine.id, materialId, materialSelectorOutputIndex);
         }
     };
 
     if (!config) return null;
 
-    const items = getRecipeOutputItemsForFacility(config.id);
+    const getInstanceSelectableItems = () => {
+        if (!canFacilityManuallySelectOutput(config.id) || !machine) return [];
+        if (!canFacilityRunMultipleRecipes(config.id)) return getManualSelectableItemsForFacility(config.id);
+
+        const inputItems = connections
+            .filter(connection => connection.toOriginal?.machineId === machine.id)
+            .map(connection => getConnectionCarriedItem(connection, machines))
+            .filter((item): item is NonNullable<typeof item> => Boolean(item));
+        const inputIds = inputItems.map(item => item.id);
+        const unique = new Map<string, NonNullable<typeof inputItems[number]>>();
+
+        inputItems.filter(item => item.state === 'liquid').forEach(item => unique.set(item.id, item));
+        findSatisfiedRecipesByInputs(config.id, inputIds).forEach(recipe => {
+            getRecipeItemsByKind(recipe, 'outputs', 'pipe').forEach(item => unique.set(item.id, item));
+        });
+
+        return [...unique.values()];
+    };
+
+    const items = getInstanceSelectableItems();
     const normalizedQuery = query.trim().toLowerCase();
     const filteredItems = normalizedQuery
         ? items.filter(item => [
@@ -50,7 +71,7 @@ export const MaterialSelector: React.FC = () => {
                                         {config.name}
                                     </Text>
                                     <Text color={"var(--gray-dark)"} fontSize={"sm"} fontWeight={"bold"} ml={2}>
-                                        请选择物品
+                                        {materialSelectorOutputIndex !== null ? `选择出口 ${materialSelectorOutputIndex + 1}` : '请选择物品'}
                                     </Text>
                                 </Flex>
                             </Box>

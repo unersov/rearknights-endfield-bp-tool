@@ -53,7 +53,8 @@ export const OperationHints = () => {
                 </>
             )}
 
-            <div className="hint-item"><div className="key-icon"><Icon icon="ph:mouse-middle-click-fill" width="24" height="24" /></div><span>移动画面</span></div>
+            <div className="hint-item"><div className="key-icon"><Icon icon="ph:mouse-left-click-fill" width="24" height="24" /></div><span>移动画面</span></div>
+            <div className="hint-item"><div className="key-icon">WASD</div><span>移动画面</span></div>
             <div className="hint-item"><div className="key-icon"><Icon icon="ph:mouse-scroll" width="24" height="24" /></div><span>缩放画面</span></div>
             <div className="hint-item"><div className="key-icon">Ctrl</div><span>+</span><div className="key-icon">Z</div><span>撤销</span></div>
             <div className="hint-item"><div className="key-icon">Ctrl</div><span>+</span><div className="key-icon">Shift</div><span>+</span><div className="key-icon">Z</div><span>恢复</span></div>

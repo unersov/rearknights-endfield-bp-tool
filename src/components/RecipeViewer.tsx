@@ -1,4 +1,4 @@
-import { Badge, Box, CloseButton, Dialog, Flex, Input, Text, VStack } from '@chakra-ui/react';
+import { Badge, Box, Button, CloseButton, Dialog, Flex, Input, Text, VStack } from '@chakra-ui/react';
 import { useMemo, useState } from 'react';
 import { FACILITIES } from '../config/facilities';
 import type { RecipeItemAmount } from '../types';
@@ -8,6 +8,9 @@ import { getAllRecipesIncludingDynamic, getItemByIdIncludingDynamic } from '../u
 interface RecipeViewerProps {
     isOpen: boolean;
     onClose: () => void;
+    facilityId?: string | null;
+    selectedRecipeId?: string;
+    onSelectRecipe?: (recipeId: string) => void;
 }
 
 const facilitiesById = new Map(FACILITIES.map(facility => [facility.id, facility]));
@@ -47,14 +50,18 @@ const RecipeItems = ({ entries, emptyText }: { entries: RecipeItemAmount[]; empt
     </Flex>
 );
 
-export const RecipeViewer = ({ isOpen, onClose }: RecipeViewerProps) => {
+export const RecipeViewer = ({ isOpen, onClose, facilityId, selectedRecipeId, onSelectRecipe }: RecipeViewerProps) => {
     const [query, setQuery] = useState('');
     const normalizedQuery = query.trim().toLowerCase();
+    const baseRecipes = useMemo(
+        () => facilityId ? allRecipes.filter(recipe => recipe.machineId === facilityId) : allRecipes,
+        [facilityId]
+    );
 
     const filteredRecipes = useMemo(() => {
-        if (!normalizedQuery) return allRecipes;
+        if (!normalizedQuery) return baseRecipes;
 
-        return allRecipes.filter(recipe => {
+        return baseRecipes.filter(recipe => {
             const facility = facilitiesById.get(recipe.machineId);
             const searchText = [
                 recipe.id,
@@ -68,7 +75,7 @@ export const RecipeViewer = ({ isOpen, onClose }: RecipeViewerProps) => {
 
             return searchText.includes(normalizedQuery);
         });
-    }, [normalizedQuery]);
+    }, [baseRecipes, normalizedQuery]);
 
     return (
         <Dialog.Root open={isOpen} onOpenChange={(event) => !event.open && onClose()} size="xl">
@@ -81,7 +88,7 @@ export const RecipeViewer = ({ isOpen, onClose }: RecipeViewerProps) => {
                     <Dialog.Header>
                         <Dialog.Title>
                             <Box borderLeft="4px solid var(--gray-dark)" pl="8px">
-                                <Text fontSize="xl" fontWeight="bold">查看配方</Text>
+                                <Text fontSize="xl" fontWeight="bold">{facilityId ? `${facilitiesById.get(facilityId)?.name || facilityId}配方` : '查看配方'}</Text>
                             </Box>
                         </Dialog.Title>
                     </Dialog.Header>
@@ -122,6 +129,7 @@ export const RecipeViewer = ({ isOpen, onClose }: RecipeViewerProps) => {
                                                 <Flex gap="6px" wrap="wrap" justify="flex-end">
                                                     <Badge>{facility?.name || recipe.machineId}</Badge>
                                                     <Badge colorPalette="yellow">{recipe.durationSeconds}s</Badge>
+                                                    {selectedRecipeId === recipe.id && <Badge colorPalette="green">当前</Badge>}
                                                 </Flex>
                                             </Flex>
 
@@ -135,6 +143,11 @@ export const RecipeViewer = ({ isOpen, onClose }: RecipeViewerProps) => {
                                                     <RecipeItems entries={recipe.outputs} emptyText="无产物" />
                                                 </Box>
                                                 <Text fontSize="xs" color="var(--gray)">使用设施：{facility?.name || recipe.machineId} / {recipe.machineId}</Text>
+                                                {onSelectRecipe && (
+                                                    <Button size="xs" variant="outline" className="yellow-btn" alignSelf="flex-start" onClick={() => onSelectRecipe(recipe.id)}>
+                                                        选择该配方
+                                                    </Button>
+                                                )}
                                             </VStack>
                                         </Box>
                                     );
