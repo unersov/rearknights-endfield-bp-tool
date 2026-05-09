@@ -1,4 +1,4 @@
-import type { ConnectionKind, FacilityConfig, PlacedMachine, Point, PortConfig } from '../types';
+import type { Connection, ConnectionKind, FacilityConfig, PlacedMachine, Point, PortConfig } from '../types';
 import { getRotatedPorts } from './machineUtils';
 
 const LOGISTICS_ICON_MAP: Record<string, string> = {
@@ -58,20 +58,44 @@ export const getConnectionOutputs = (config: FacilityConfig, machine: PlacedMach
         .filter(port => (port.kind === 'pipe' ? 'pipe' : 'belt') === kind);
 };
 
-export const getNearestOutputPortIndex = (
-    config: FacilityConfig,
-    machine: PlacedMachine,
+export const isOutputPortConnected = (
+    machineId: string,
+    portIndex: number,
     kind: ConnectionKind,
-    target: Point
-) => {
-    const outputs = getConnectionOutputs(config, machine, kind);
-    if (outputs.length === 0) return -1;
+    connections: Connection[]
+) => connections.some(conn =>
+    conn.fromOriginal.machineId === machineId &&
+    conn.fromOriginal.portIndex === portIndex &&
+    (conn.kind || 'belt') === kind
+);
 
-    let bestIndex = 0;
+export const isInputPortConnected = (
+    machineId: string,
+    portIndex: number,
+    kind: ConnectionKind,
+    connections: Connection[]
+) => connections.some(conn =>
+    conn.toOriginal?.machineId === machineId &&
+    conn.toOriginal.portIndex === portIndex &&
+    (conn.kind || 'belt') === kind
+);
+
+const getNearestPortIndex = (
+    ports: PortConfig[],
+    machine: PlacedMachine,
+    target: Point,
+    isAvailable?: (port: PortConfig, index: number) => boolean
+) => {
+    let bestIndex = -1;
     let bestDistance = Infinity;
-    outputs.forEach((port, index) => {
-        const absX = machine.x + port.x;
-        const absY = machine.y + port.y;
+    ports.forEach((port, index) => {
+        if (isAvailable && !isAvailable(port, index)) return;
+        let absX = machine.x + port.x;
+        let absY = machine.y + port.y;
+        if (port.side === 'left') absX -= 0.5;
+        if (port.side === 'right') absX += 0.5;
+        if (port.side === 'top') absY -= 0.5;
+        if (port.side === 'bottom') absY += 0.5;
         const distance = Math.abs(absX - target.x) + Math.abs(absY - target.y);
         if (distance < bestDistance) {
             bestDistance = distance;
@@ -81,25 +105,40 @@ export const getNearestOutputPortIndex = (
     return bestIndex;
 };
 
+export const getNearestOutputPortIndex = (
+    config: FacilityConfig,
+    machine: PlacedMachine,
+    kind: ConnectionKind,
+    target: Point,
+    connections?: Connection[]
+): number => {
+    const outputs = getConnectionOutputs(config, machine, kind);
+    if (outputs.length === 0) return -1;
+    return getNearestPortIndex(
+        outputs,
+        machine,
+        target,
+        connections
+            ? (_port, index) => !isOutputPortConnected(machine.id, index, kind, connections)
+            : undefined
+    );
+};
+
 export const getNearestInputPortIndex = (
     config: FacilityConfig,
     machine: PlacedMachine,
     kind: ConnectionKind,
-    target: Point
-) => {
+    target: Point,
+    connections?: Connection[]
+): number => {
     const inputs = getConnectionInputs(config, machine, kind);
     if (inputs.length === 0) return -1;
-
-    let bestIndex = 0;
-    let bestDistance = Infinity;
-    inputs.forEach((port, index) => {
-        const absX = machine.x + port.x;
-        const absY = machine.y + port.y;
-        const distance = Math.abs(absX - target.x) + Math.abs(absY - target.y);
-        if (distance < bestDistance) {
-            bestDistance = distance;
-            bestIndex = index;
-        }
-    });
-    return bestIndex;
+    return getNearestPortIndex(
+        inputs,
+        machine,
+        target,
+        connections
+            ? (_port, index) => !isInputPortConnected(machine.id, index, kind, connections)
+            : undefined
+    );
 };

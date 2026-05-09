@@ -10,7 +10,7 @@ import { getRotatedDimensions, getRotatedPorts, isMachinePowered } from '../util
 import { ItemIcon } from './ItemIcon';
 import { canFacilityRunMultipleRecipes, findMatchingRecipeByInputs, findSatisfiedRecipesByInputs, getItemByIdIncludingDynamic, getRecipesForFacility } from '../utils/dynamicRecipes';
 import { getRecipeItemsByKind } from '../utils/recipePorts';
-import { getConnectionInputs, getConnectionOutputs, getFacilityImageId, getNearestOutputPortIndex, isLogisticsFacility, shouldRotateFacilityImage } from '../utils/facilityLogistics';
+import { getConnectionInputs, getConnectionOutputs, getFacilityImageId, getNearestOutputPortIndex, isLogisticsFacility, isOutputPortConnected, shouldRotateFacilityImage } from '../utils/facilityLogistics';
 import { isDepotBusSectionOperational, isWarehousePortOperational } from '../utils/placementRules';
 import { getConnectionCarriedItem } from '../utils/connectionContent';
 
@@ -21,7 +21,7 @@ interface MachineProps {
 
 export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
     const config = getFacilityConfig(data.machineId);
-    const { mode, selectedMachineId, startWiring, wiringSource, commitWiring, updateWiringPreview, isWiring, zoom, pickupMachine, machines, openFacilityDetail, openMaterialSelector } = useGameStore();
+    const { mode, selectedMachineId, startWiring, wiringSource, commitWiring, updateWiringPreview, isWiring, zoom, pickupMachine, machines, connections, openFacilityDetail, openMaterialSelector } = useGameStore();
     const pressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     if (!config) return null;
@@ -52,11 +52,12 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
             e.stopPropagation();
             const kind = mode === GameMode.PIPE ? 'pipe' : 'belt';
             const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+            const localX = ((e.clientX - rect.left) / rect.width) * width;
+            const localY = ((e.clientY - rect.top) / rect.height) * height;
             const target = {
-                x: data.x + Math.floor(((e.clientX - rect.left) / rect.width) * width),
-                y: data.y + Math.floor(((e.clientY - rect.top) / rect.height) * height),
+                x: data.x + localX,
+                y: data.y + localY,
             };
-
             if (isWiring) {
                 const inputPorts = getConnectionInputs(config, data, kind);
                 if (inputPorts.length > 0) {
@@ -66,7 +67,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
                 return;
             }
 
-            const outputIndex = getNearestOutputPortIndex(config, data, kind, target);
+            const outputIndex = getNearestOutputPortIndex(config, data, kind, target, connections);
             if (outputIndex !== -1) {
                 const output = getConnectionOutputs(config, data, kind)[outputIndex];
                 startWiring(data.id, outputIndex, { x: data.x + output.x, y: data.y + output.y }, kind);
@@ -217,6 +218,7 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
         e.stopPropagation();
         const kind = getConnectionKind(portRel);
         if (mode === modeForKind(kind)) {
+            if (isOutputPortConnected(data.id, portIndex, kind, connections)) return;
             // 计算端口的绝对网格坐标
             const absX = data.x + portRel.x;
             const absY = data.y + portRel.y;

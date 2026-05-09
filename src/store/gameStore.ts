@@ -5,7 +5,7 @@ import { FACILITIES } from '../config/facilities';
 import { checkCollision, findPath } from '../utils/gridUtils';
 import { getRotatedDimensions, getRotatedPorts } from '../utils/machineUtils';
 import { canFacilityRunMultipleRecipes, findMatchingRecipeByInputs, findSatisfiedRecipesByInputs, getItemByIdIncludingDynamic, getPreferredRecipeOutput, getRecipesForFacility } from '../utils/dynamicRecipes';
-import { getConnectionInputs, getConnectionOutputs, getNearestInputPortIndex, getNearestOutputPortIndex, isBridgeForKind, isLogisticsFacility } from '../utils/facilityLogistics';
+import { canFacilityActAsConnectionNode, getConnectionInputs, getConnectionOutputs, getNearestInputPortIndex, getNearestOutputPortIndex, isBridgeForKind, isInputPortConnected, isLineFacilityForKind, isLogisticsFacility, isOutputPortConnected } from '../utils/facilityLogistics';
 import { checkPlacementRule, isRectInsideCore, isRectInsideExpandedBounds } from '../utils/placementRules';
 import { getConnectionCarriedItem } from '../utils/connectionContent';
 
@@ -131,6 +131,166 @@ const isConnectionPointAllowed = (point: Point, kind: ConnectionKind, gridWidth:
     return kind === 'pipe'
         ? isRectInsideExpandedBounds(rect, gridWidth, gridHeight)
         : isRectInsideCore(rect, gridWidth, gridHeight);
+};
+
+const pointKey = (point: Point) => `${point.x},${point.y}`;
+
+const isSamePoint = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
+
+const getEntrySide = (from: Point, to: Point): Side | undefined => {
+    if (from.x < to.x) return 'left';
+    if (from.x > to.x) return 'right';
+    if (from.y < to.y) return 'top';
+    if (from.y > to.y) return 'bottom';
+    return undefined;
+};
+
+const isLogisticsPointForKind = (point: Point, machines: PlacedMachine[], kind: ConnectionKind) =>
+    machines.some(machine => machine.x === point.x && machine.y === point.y && canFacilityActAsConnectionNode(machine.machineId, kind));
+
+const hasPathOverlap = (path: Point[], connections: Connection[], machines: PlacedMachine[], kind: ConnectionKind) => {
+    const occupied = new Set<string>();
+    connections
+        .filter(conn => (conn.kind || 'belt') === kind)
+        .forEach(conn => conn.path.forEach(p => occupied.add(pointKey(p))));
+
+    return path.some((point, index) => {
+        if (!occupied.has(pointKey(point))) return false;
+        if (index === 0 || index === path.length - 1) return false;
+        return !isPointOnBridge(point, machines, kind) && !isLogisticsPointForKind(point, machines, kind);
+    });
+};
+
+const getMatchingInputAtPoint = (
+    point: Point,
+    target: Point,
+    machines: PlacedMachine[],
+    connections: Connection[],
+    kind: ConnectionKind,
+    preferredSide?: Side
+): { machine: PlacedMachine; portIndex: number; port: ReturnType<typeof getConnectionInputs>[number] } | null => {
+    for (const machine of machines) {
+        const config = FACILITIES.find(candidate => candidate.id === machine.machineId);
+        if (!config) continue;
+
+        const inputs = getConnectionInputs(config, machine, kind);
+        if (preferredSide) {
+            const preferredInputIndex = inputs.findIndex((port, index) => {
+                const portKind: ConnectionKind = port.kind === 'pipe' ? 'pipe' : 'belt';
+                return machine.x + port.x === point.x &&
+                    machine.y + port.y === point.y &&
+                    port.side === preferredSide &&
+                    portKind === kind &&
+                    !isInputPortConnected(machine.id, index, kind, connections);
+            });
+            if (preferredInputIndex !== -1) {
+                return { machine, portIndex: preferredInputIndex, port: inputs[preferredInputIndex] };
+            }
+        }
+
+        const dims = getRotatedDimensions(config.width, config.height, machine.rotation);
+        const isInside = point.x >= machine.x && point.x < machine.x + dims.width && point.y >= machine.y && point.y < machine.y + dims.height;
+        if (isInside) {
+            const nearestInputIndex = getNearestInputPortIndex(config, machine, kind, target, connections);
+            const nearestInput = nearestInputIndex !== -1 ? inputs[nearestInputIndex] : undefined;
+            if (nearestInput) {
+                return { machine, portIndex: nearestInputIndex, port: nearestInput };
+            }
+        }
+
+        const exactInputIndex = inputs.findIndex((port, index) => {
+            const portKind: ConnectionKind = port.kind === 'pipe' ? 'pipe' : 'belt';
+            return machine.x + port.x === point.x &&
+                machine.y + port.y === point.y &&
+                portKind === kind &&
+                !isInputPortConnected(machine.id, index, kind, connections);
+        });
+
+        if (exactInputIndex !== -1) {
+            return { machine, portIndex: exactInputIndex, port: inputs[exactInputIndex] };
+        }
+    }
+
+    return null;
+};
+
+const getFacilityTransportKind = (config: typeof FACILITIES[number]): ConnectionKind | null => {
+    if (config.id === 'pipe' || config.id.startsWith('pipe-')) return 'pipe';
+    if (config.id === 'belt' || config.id.startsWith('belt-')) return 'belt';
+    const ports = [...config.inputs, ...config.outputs];
+    if (ports.some(port => port.kind === 'pipe')) return 'pipe';
+    if (ports.some(port => (port.kind || 'item') === 'item')) return 'belt';
+    return null;
+};
+
+const findReplacementMachineIds = (
+    rect: { x: number; y: number; width: number; height: number },
+    machines: PlacedMachine[],
+    kind: ConnectionKind | null
+) => {
+    if (!kind) return new Set<string>();
+    return new Set(machines
+        .filter(machine =>
+            isLineFacilityForKind(machine.machineId, kind) &&
+            machine.x >= rect.x &&
+            machine.x < rect.x + rect.width &&
+            machine.y >= rect.y &&
+            machine.y < rect.y + rect.height
+        )
+        .map(machine => machine.id));
+};
+
+const splitConnectionsThroughMachine = (
+    connections: Connection[],
+    machine: PlacedMachine,
+    config: typeof FACILITIES[number],
+    kind: ConnectionKind
+) => {
+    let didSplit = false;
+    const nextConnections: Connection[] = [];
+
+    connections.forEach(connection => {
+        const connectionKind = connection.kind || 'belt';
+        const passIndex = connectionKind === kind
+            ? connection.path.findIndex(point => isSamePoint(point, { x: machine.x, y: machine.y }))
+            : -1;
+
+        if (passIndex <= 0 || passIndex >= connection.path.length - 1) {
+            nextConnections.push(connection);
+            return;
+        }
+
+        const previousPoint = connection.path[passIndex - 1];
+        const nextPoint = connection.path[passIndex + 1];
+        const inputIndex = getNearestInputPortIndex(config, machine, kind, previousPoint);
+        const outputIndex = getNearestOutputPortIndex(config, machine, kind, nextPoint);
+
+        if (inputIndex === -1 || outputIndex === -1) {
+            nextConnections.push(connection);
+            return;
+        }
+
+        didSplit = true;
+        const firstPath = connection.path.slice(0, passIndex + 1);
+        const secondPath = connection.path.slice(passIndex);
+
+        nextConnections.push({
+            ...connection,
+            id: crypto.randomUUID(),
+            toOriginal: { machineId: machine.id, portIndex: inputIndex },
+            path: firstPath,
+            kind,
+        });
+        nextConnections.push({
+            ...connection,
+            id: crypto.randomUUID(),
+            fromOriginal: { machineId: machine.id, portIndex: outputIndex },
+            path: secondPath,
+            kind,
+        });
+    });
+
+    return didSplit ? nextConnections : connections;
 };
 
 const deriveAutoRecipeProducts = (machines: PlacedMachine[], connections: Connection[]) => {
@@ -378,13 +538,16 @@ export const useGameStore = create<GameState>((set, get) => ({
         };
 
         const currentMachines = get().machines;
+        const placementKind = getFacilityTransportKind(config);
+        const replacementMachineIds = findReplacementMachineIds(candidateRect, currentMachines, placementKind);
+        const machinesForCollision = currentMachines.filter(machine => !replacementMachineIds.has(machine.id));
 
-        const placement = checkPlacementRule(config, candidateRect, currentMachines, get().gridWidth, get().gridHeight, rotation);
+        const placement = checkPlacementRule(config, candidateRect, machinesForCollision, get().gridWidth, get().gridHeight, rotation);
         if (!placement.valid) {
             return false;
         }
 
-        if (checkCollision(candidateRect, currentMachines)) {
+        if (checkCollision(candidateRect, machinesForCollision)) {
             // Collision detected, do not place
             return false;
         }
@@ -422,8 +585,12 @@ export const useGameStore = create<GameState>((set, get) => ({
         get().takeSnapshot();
 
         set(state => {
-            const nextConnections = shouldClearConnections
-                ? state.connections.filter(c => {
+            const baseConnections = state.connections.filter(connection =>
+                !replacementMachineIds.has(connection.fromOriginal.machineId) &&
+                !replacementMachineIds.has(connection.toOriginal?.machineId || '')
+            );
+            const clearedConnections = shouldClearConnections
+                ? baseConnections.filter(c => {
                     // Remove if starting from this machine
                     if (c.fromOriginal.machineId === finalId) return false;
                     // Remove if ending at this machine (by ID)
@@ -437,8 +604,11 @@ export const useGameStore = create<GameState>((set, get) => ({
 
                     return true;
                 })
-                : state.connections;
-            const nextMachines = [...state.machines, newMachine];
+                : baseConnections;
+            const nextConnections = placementKind
+                ? splitConnectionsThroughMachine(clearedConnections, newMachine, config, placementKind)
+                : clearedConnections;
+            const nextMachines = [...state.machines.filter(machine => !replacementMachineIds.has(machine.id)), newMachine];
 
             return {
                 machines: deriveAutoRecipeProducts(nextMachines, nextConnections),
@@ -530,32 +700,22 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     startWiring: (machineInstanceId, portIndex, absolutePos, kind) => {
         const { connections } = get();
-        const nextConnections = connections.filter(conn =>
-            !(
-                conn.fromOriginal.machineId === machineInstanceId &&
-                conn.fromOriginal.portIndex === portIndex &&
-                (conn.kind || 'belt') === kind
-            )
-        );
-        if (nextConnections.length !== connections.length) {
-            get().takeSnapshot();
-        }
+        if (isOutputPortConnected(machineInstanceId, portIndex, kind, connections)) return;
 
-        set(state => ({
-            machines: deriveAutoRecipeProducts(state.machines, nextConnections),
-            connections: nextConnections,
+        set({
             isWiring: true,
             isWiringValid: true,
             wiringKind: kind,
             wiringSource: { machineId: machineInstanceId, portIndex, absolutePos },
             wiringFixedPath: [absolutePos],
             wiringPreviewPath: [absolutePos] // Start point
-        }));
+        });
     },
 
     updateWiringPreview: (mouseGridPos) => {
         const { wiringSource, machines, wiringFixedPath, wiringKind, connections, gridWidth, gridHeight } = get();
         if (!wiringSource || wiringFixedPath.length === 0) return;
+        const mouseCell = { x: Math.floor(mouseGridPos.x), y: Math.floor(mouseGridPos.y) };
 
         let activeSource = wiringSource;
         let activeFixedPath = wiringFixedPath;
@@ -563,7 +723,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             const sourceMachine = machines.find(m => m.id === wiringSource.machineId);
             const sourceConfig = sourceMachine ? FACILITIES.find(m => m.id === sourceMachine.machineId) : undefined;
             if (sourceMachine && sourceConfig && isLogisticsFacility(sourceConfig)) {
-                const nearestOutputIndex = getNearestOutputPortIndex(sourceConfig, sourceMachine, wiringKind, mouseGridPos);
+                const nearestOutputIndex = getNearestOutputPortIndex(sourceConfig, sourceMachine, wiringKind, mouseGridPos, connections);
                 const output = nearestOutputIndex !== -1 ? getConnectionOutputs(sourceConfig, sourceMachine, wiringKind)[nearestOutputIndex] : undefined;
                 if (output) {
                     activeSource = {
@@ -572,12 +732,20 @@ export const useGameStore = create<GameState>((set, get) => ({
                         absolutePos: { x: sourceMachine.x + output.x, y: sourceMachine.y + output.y },
                     };
                     activeFixedPath = [activeSource.absolutePos];
+                } else {
+                    set({
+                        wiringSource,
+                        wiringFixedPath,
+                        wiringPreviewPath: [wiringSource.absolutePos, mouseCell],
+                        isWiringValid: false
+                    });
+                    return;
                 }
             }
         }
 
         const start = activeFixedPath[activeFixedPath.length - 1]; // Start from last anchor
-        let end = mouseGridPos;
+        let end = mouseCell;
 
         // Determine Start Side (only matters if we are at the very beginning of the whole path)
         let startSide: Side | undefined;
@@ -597,34 +765,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         // Determine End Side if hovering a valid input port
         let endSide: Side | undefined;
         let isMatchingInput = false;
-        // Naive check: is mouse on any machine's input port?
-        for (const m of machines) {
-            const config = FACILITIES.find(mc => mc.id === m.machineId);
-            if (!config) continue;
-
-            const inputs = getConnectionInputs(config, m, wiringKind);
-            inputs.forEach((p) => {
-                const absX = m.x + p.x;
-                const absY = m.y + p.y;
-                const portKind: ConnectionKind = p.kind === 'pipe' ? 'pipe' : 'belt';
-                if (absX === end.x && absY === end.y && portKind === wiringKind) {
-                    endSide = p.side;
-                    isMatchingInput = true;
-                }
-            });
-            if (!isMatchingInput) {
-                const dims = getRotatedDimensions(config.width, config.height, m.rotation);
-                const isInside = end.x >= m.x && end.x < m.x + dims.width && end.y >= m.y && end.y < m.y + dims.height;
-                if (isInside) {
-                    const inputIndex = getNearestInputPortIndex(config, m, wiringKind, mouseGridPos);
-                    const input = inputIndex !== -1 ? inputs[inputIndex] : undefined;
-                    if (input) {
-                        end = { x: m.x + input.x, y: m.y + input.y };
-                        endSide = input.side;
-                        isMatchingInput = true;
-                    }
-                }
-            }
+        const matchedInput = getMatchingInputAtPoint(end, mouseGridPos, machines, connections, wiringKind);
+        if (matchedInput) {
+            end = { x: matchedInput.machine.x + matchedInput.port.x, y: matchedInput.machine.y + matchedInput.port.y };
+            endSide = matchedInput.port.side;
+            isMatchingInput = true;
         }
 
         const segmentPath = findPath(start, end, machines, startSide, endSide, wiringKind);
@@ -632,11 +777,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (segmentPath) {
             const cleanSegment = segmentPath.length > 0 ? segmentPath.slice(1) : [];
             const previewPath = [...activeFixedPath, ...cleanSegment];
-            const occupied = new Set<string>();
-            connections
-                .filter(conn => (conn.kind || 'belt') === wiringKind)
-                .forEach(conn => conn.path.forEach(p => occupied.add(`${p.x},${p.y}`)));
-            const hasOverlap = previewPath.some(p => occupied.has(`${p.x},${p.y}`) && !isPointOnBridge(p, machines, wiringKind));
+            const hasOverlap = hasPathOverlap(previewPath, connections, machines, wiringKind);
             const isInAllowedBounds = previewPath.every(p => isConnectionPointAllowed(p, wiringKind, gridWidth, gridHeight));
             set({
                 wiringSource: activeSource,
@@ -683,11 +824,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (segmentPath) {
             const cleanSegment = segmentPath.length > 0 ? segmentPath.slice(1) : [];
             const nextPath = [...wiringFixedPath, ...cleanSegment];
-            const occupied = new Set<string>();
-            connections
-                .filter(conn => (conn.kind || 'belt') === wiringKind)
-                .forEach(conn => conn.path.forEach(p => occupied.add(`${p.x},${p.y}`)));
-            if (!nextPath.some(p => occupied.has(`${p.x},${p.y}`) && !isPointOnBridge(p, machines, wiringKind)) &&
+            if (!hasPathOverlap(nextPath, connections, machines, wiringKind) &&
                 nextPath.every(p => isConnectionPointAllowed(p, wiringKind, gridWidth, gridHeight))) {
                 set({ wiringFixedPath: nextPath });
             }
@@ -697,7 +834,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     commitWiring: () => {
-        const { wiringSource, wiringPreviewPath, isWiringValid, machines, wiringKind } = get();
+        const { wiringSource, wiringPreviewPath, isWiringValid, machines, connections, wiringKind } = get();
         if (!wiringSource || wiringPreviewPath.length < 2 || !isWiringValid) {
             get().cancelWiring();
             return;
@@ -706,26 +843,16 @@ export const useGameStore = create<GameState>((set, get) => ({
         get().takeSnapshot();
 
         const end = wiringPreviewPath[wiringPreviewPath.length - 1];
+        const beforeEnd = wiringPreviewPath[wiringPreviewPath.length - 2];
+        const preferredEndSide = beforeEnd ? getEntrySide(beforeEnd, end) : undefined;
         let toOriginal: { machineId: string; portIndex: number } | null = null;
 
-        // Find target machine/port
-        for (const m of machines) {
-            const config = FACILITIES.find(mc => mc.id === m.machineId);
-            if (!config) continue;
-
-            const inputs = getConnectionInputs(config, m, wiringKind);
-            // Check if end matches any input
-            const portIndex = inputs.findIndex(p => {
-                const absX = m.x + p.x;
-                const absY = m.y + p.y;
-                const portKind: ConnectionKind = p.kind === 'pipe' ? 'pipe' : 'belt';
-                return absX === end.x && absY === end.y && portKind === wiringKind;
-            });
-
-            if (portIndex !== -1) {
-                toOriginal = { machineId: m.id, portIndex };
-                break;
-            }
+        const matchedInput = getMatchingInputAtPoint(end, end, machines, connections, wiringKind, preferredEndSide);
+        if (matchedInput) {
+            toOriginal = { machineId: matchedInput.machine.id, portIndex: matchedInput.portIndex };
+        } else {
+            get().cancelWiring();
+            return;
         }
 
         const newConnection: Connection = {

@@ -9,8 +9,18 @@ import './Grid.scss';
 import { checkCollision } from '../utils/gridUtils';
 import { getRotatedDimensions, getRotatedPorts } from '../utils/machineUtils';
 import { OUTER_BUILD_MARGIN, checkPlacementRule } from '../utils/placementRules';
+import { isLineFacilityForKind } from '../utils/facilityLogistics';
 
 const GRID_SIZE = 40; // 需與 CSS 中的 --grid-size 保持一致
+
+const getFacilityTransportKind = (facility: typeof FACILITIES[number]): ConnectionKind | null => {
+    if (facility.id === 'pipe' || facility.id.startsWith('pipe-')) return 'pipe';
+    if (facility.id === 'belt' || facility.id.startsWith('belt-')) return 'belt';
+    const ports = [...facility.inputs, ...facility.outputs];
+    if (ports.some(port => port.kind === 'pipe')) return 'pipe';
+    if (ports.some(port => (port.kind || 'item') === 'item')) return 'belt';
+    return null;
+};
 
 export const Grid = () => {
     const {
@@ -321,8 +331,20 @@ export const Grid = () => {
             height: ghostHeight
         };
 
-        const placement = checkPlacementRule(ghostConfig, candidate, machines, gridWidth, gridHeight, previewRotation);
-        const hasCollision = checkCollision(candidate, machines);
+        const placementKind = getFacilityTransportKind(ghostConfig);
+        const replaceableMachineIds = new Set(machines
+            .filter(machine =>
+                placementKind &&
+                isLineFacilityForKind(machine.machineId, placementKind) &&
+                machine.x >= candidate.x &&
+                machine.x < candidate.x + candidate.width &&
+                machine.y >= candidate.y &&
+                machine.y < candidate.y + candidate.height
+            )
+            .map(machine => machine.id));
+        const machinesForPlacement = machines.filter(machine => !replaceableMachineIds.has(machine.id));
+        const placement = checkPlacementRule(ghostConfig, candidate, machinesForPlacement, gridWidth, gridHeight, previewRotation);
+        const hasCollision = checkCollision(candidate, machinesForPlacement);
         isGhostInvalid = !placement.valid || hasCollision;
         invalidPlacementReason = placement.reason || (hasCollision ? '该位置已被占用' : '');
 
