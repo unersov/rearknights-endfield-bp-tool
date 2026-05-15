@@ -1680,7 +1680,7 @@ export const RECIPES: Recipe[] = [
   },
   {
     "id": "filling-unit_recipe_78_1",
-    "name": "灌装机：10钢质瓶、10荞花柑实粉末 → 精选荞愈胶囊",
+    "name": "灌装机：10钢质瓶、10细磨荞花粉末 → 精选荞愈胶囊",
     "machineId": "filling-unit",
     "durationSeconds": 10,
     "inputs": [
@@ -1690,7 +1690,8 @@ export const RECIPES: Recipe[] = [
         "amount": 10
       },
       {
-        "name": "荞花柑实粉末",
+        "materialId": "ground_buckflower_powder",
+        "name": "细磨荞花粉末",
         "amount": 10
       }
     ],
@@ -2525,7 +2526,7 @@ export const RECIPES: Recipe[] = [
   },
   {
     "id": "expanded-crucible_recipe_103_2",
-    "name": "扩容反应池：2赫铜溶液、蓝铁粉末 → 赤铜块、污水",
+    "name": "扩容反应池：2赫铜溶液、蓝铁粉末 → 赫铜块、污水",
     "machineId": "expanded-crucible",
     "durationSeconds": 2,
     "inputs": [

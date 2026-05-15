@@ -187,6 +187,9 @@ export const getManualSelectableItemsForFacility = (facilityId: string): Item[] 
 export const canFacilityManuallySelectOutput = (facilityId: string) =>
     facilityId === 'automation-core' || facilityId === 'depot-unloader' || facilityId === 'fluid-tank' || facilityId === 'fluid-pump' || facilityId === 'acid-resistant-pump-mk-ii' || canFacilityRunMultipleRecipes(facilityId);
 
+export const canFacilityManuallySelectRecipe = (facilityId: string) =>
+    facilityId === 'seed-picking-unit';
+
 const outputPriority = (item: Item, preferLiquid: boolean) => {
     const wasteRank: Record<string, number> = {
         xircon_effluent: preferLiquid ? 2 : 3,

@@ -112,6 +112,7 @@ interface GameState {
     currentBlueprintId: string | null;
     currentBlueprintName: string | null;
     loadGame: (machines: PlacedMachine[], connections: Connection[], gridWidth: number, gridHeight: number, blueprintId: string | null, blueprintName: string) => void;
+    applyAutoPlan: (machines: PlacedMachine[], connections: Connection[], gridWidth: number, gridHeight: number) => void;
     setCurrentBlueprint: (id: string, name: string) => void;
     resetGame: () => void;
 
@@ -139,6 +140,26 @@ const pointKey = (point: Point) => `${point.x},${point.y}`;
 
 const isSamePoint = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
 
+const directionBetween = (from: Point, to: Point): 'h' | 'v' | null => {
+    if (from.x !== to.x && from.y === to.y) return 'h';
+    if (from.y !== to.y && from.x === to.x) return 'v';
+    return null;
+};
+
+const isStraightThroughPathPoint = (path: Point[], index: number) => {
+    if (index <= 0 || index >= path.length - 1) return false;
+    const before = directionBetween(path[index - 1], path[index]);
+    const after = directionBetween(path[index], path[index + 1]);
+    return before !== null && before === after;
+};
+
+const pathDirectionAtPoint = (path: Point[], point: Point) => {
+    const index = path.findIndex(candidate => isSamePoint(candidate, point));
+    if (index <= 0 || index >= path.length - 1) return null;
+    if (!isStraightThroughPathPoint(path, index)) return null;
+    return directionBetween(path[index - 1], path[index]);
+};
+
 const getEntrySide = (from: Point, to: Point): Side | undefined => {
     if (from.x < to.x) return 'left';
     if (from.x > to.x) return 'right';
@@ -164,17 +185,64 @@ const isLogisticsPointForKind = (point: Point, machines: PlacedMachine[], kind: 
     machines.some(machine => machine.x === point.x && machine.y === point.y && canFacilityActAsConnectionNode(machine.machineId, kind));
 
 const hasPathOverlap = (path: Point[], connections: Connection[], machines: PlacedMachine[], kind: ConnectionKind) => {
-    const occupied = new Set<string>();
+    const occupied = new Map<string, Connection[]>();
     connections
         .filter(conn => (conn.kind || 'belt') === kind)
-        .forEach(conn => conn.path.forEach(p => occupied.add(pointKey(p))));
+        .forEach(conn => conn.path.slice(1, -1).forEach(p => {
+            const key = pointKey(p);
+            const list = occupied.get(key) || [];
+            list.push(conn);
+            occupied.set(key, list);
+        }));
 
     return path.some((point, index) => {
-        if (!occupied.has(pointKey(point))) return false;
+        const overlappingConnections = occupied.get(pointKey(point));
+        if (!overlappingConnections) return false;
         if (index === 0 || index === path.length - 1) return false;
-        return !isPointOnBridge(point, machines, kind) && !isLogisticsPointForKind(point, machines, kind);
+        if (isLogisticsPointForKind(point, machines, kind) && !isPointOnBridge(point, machines, kind)) return true;
+
+        const currentDirection = isStraightThroughPathPoint(path, index)
+            ? directionBetween(path[index - 1], path[index])
+            : null;
+        if (!currentDirection) return true;
+
+        for (const connection of overlappingConnections) {
+            const existingDirection = pathDirectionAtPoint(connection.path, point);
+            if (!existingDirection) return true;
+            if (existingDirection === currentDirection) return true;
+            if (!isPointOnBridge(point, machines, kind)) return true;
+        }
+        return false;
     });
 };
+
+const hasIllegalLogisticsTraversal = (path: Point[], machines: PlacedMachine[], kind: ConnectionKind) =>
+    path.some((point, index) => {
+        if (index === 0 || index === path.length - 1) return false;
+        const machine = machines.find(candidate => candidate.x === point.x && candidate.y === point.y);
+        if (!machine || !canFacilityActAsConnectionNode(machine.machineId, kind)) return false;
+        if (isBridgeForKind(machine.machineId, kind)) return !isStraightThroughPathPoint(path, index);
+        return true;
+    });
+
+const isPathClearOfFacilityFootprints = (
+    path: Point[],
+    machines: PlacedMachine[],
+    sourceMachineId: string,
+    targetMachineId?: string
+) => path.every((point, index) => {
+    if (index === 0 || index === path.length - 1) return true;
+    return !machines.some(machine => {
+        if (machine.id === sourceMachineId || machine.id === targetMachineId) return false;
+        const config = FACILITIES.find(candidate => candidate.id === machine.machineId);
+        if (!config || isLogisticsFacility(config)) return false;
+        const dims = getRotatedDimensions(config.width, config.height, machine.rotation);
+        return point.x >= machine.x &&
+            point.x < machine.x + dims.width &&
+            point.y >= machine.y &&
+            point.y < machine.y + dims.height;
+    });
+});
 
 const getMatchingInputAtPoint = (
     point: Point,
@@ -808,13 +876,17 @@ export const useGameStore = create<GameState>((set, get) => ({
                 ? getMatchingInputAtPoint(finalEnd, mouseGridPos, machines, connections, wiringKind, beforeFinalEnd ? getEntrySide(beforeFinalEnd, finalEnd) : undefined)
                 : matchedInput;
             const hasOverlap = hasPathOverlap(previewPath, connections, machines, wiringKind);
+            const hasIllegalLogistics = hasIllegalLogisticsTraversal(previewPath, machines, wiringKind);
+            const isClearOfFacilities = finalMatchedInput
+                ? isPathClearOfFacilityFootprints(previewPath, machines, activeSource.machineId, finalMatchedInput.machine.id)
+                : false;
             const isInAllowedBounds = previewPath.every(p => isConnectionPointAllowed(p, wiringKind, gridWidth, gridHeight));
             set({
                 wiringSource: activeSource,
                 wiringTarget: finalMatchedInput ? { machineId: finalMatchedInput.machine.id, portIndex: finalMatchedInput.portIndex } : null,
                 wiringFixedPath: activeFixedPath,
                 wiringPreviewPath: previewPath,
-                isWiringValid: Boolean(finalMatchedInput) && isMatchingInput && !hasOverlap && isInAllowedBounds
+                isWiringValid: Boolean(finalMatchedInput) && isMatchingInput && !hasOverlap && !hasIllegalLogistics && isClearOfFacilities && isInAllowedBounds
             });
         } else {
             // Invalid path - Show straight line but flag as invalid
@@ -857,6 +929,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             const cleanSegment = segmentPath.length > 0 ? segmentPath.slice(1) : [];
             const nextPath = [...wiringFixedPath, ...cleanSegment];
             if (!hasPathOverlap(nextPath, connections, machines, wiringKind) &&
+                !hasIllegalLogisticsTraversal(nextPath, machines, wiringKind) &&
+                isPathClearOfFacilityFootprints(nextPath, machines, wiringSource.machineId) &&
                 nextPath.every(p => isConnectionPointAllowed(p, wiringKind, gridWidth, gridHeight))) {
                 set({ wiringFixedPath: nextPath, wiringTarget: null });
             }
@@ -1435,6 +1509,22 @@ export const useGameStore = create<GameState>((set, get) => ({
             selectedConnectionIds: [],
             connectionDetailId: null,
             history: { past: [], future: [] }
+        });
+    },
+
+    applyAutoPlan: (machines, connections, gridWidth, gridHeight) => {
+        get().takeSnapshot();
+        set({
+            machines: deriveAutoRecipeProducts(machines, connections),
+            connections,
+            gridWidth,
+            gridHeight,
+            mode: GameMode.BUILD,
+            selectedMachineId: null,
+            selectedMachineIds: [],
+            selectedConnectionIds: [],
+            connectionDetailId: null,
+            uiView: 'editor',
         });
     },
 

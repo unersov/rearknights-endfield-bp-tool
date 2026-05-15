@@ -14,12 +14,16 @@ interface HeaderProps {
 
 import { ShareModal } from './ShareModal';
 import { RecipeViewer } from './RecipeViewer';
+import { AutoBlueprintModal } from './AutoBlueprintModal';
+import { AutoBlueprintSettingsPanel } from './AutoBlueprintSettingsPanel';
 import { useState } from 'react';
 
 export const Header = ({ onSave, onOpen }: HeaderProps) => {
     const { gridWidth, gridHeight, setGridSize, setUiView } = useGameStore();
     const [isShareOpen, setIsShareOpen] = useState(false);
     const [isRecipeOpen, setIsRecipeOpen] = useState(false);
+    const [isAutoPlannerOpen, setIsAutoPlannerOpen] = useState(false);
+    const [isAutoSettingsOpen, setIsAutoSettingsOpen] = useState(false);
     const [isCustomSizeOpen, setIsCustomSizeOpen] = useState(false);
     const [customWidth, setCustomWidth] = useState(String(gridWidth));
     const [customHeight, setCustomHeight] = useState(String(gridHeight));
@@ -86,6 +90,8 @@ export const Header = ({ onSave, onOpen }: HeaderProps) => {
                     </Select.Root>
                 </div>
                 <div className="actions">
+                    <Button className="recipe-button" onClick={() => setIsAutoSettingsOpen(true)}>自动蓝图设置</Button>
+                    <Button className="recipe-button" onClick={() => setIsAutoPlannerOpen(true)}>自动蓝图规划</Button>
                     <Button className="recipe-button" onClick={() => setIsRecipeOpen(true)}>查看配方</Button>
                     <IconButton icon="material-symbols:save" tooltip="保存" onClick={onSave} />
                     <IconButton icon="typcn:home" tooltip="蓝图列表" onClick={onOpen} />
@@ -96,6 +102,8 @@ export const Header = ({ onSave, onOpen }: HeaderProps) => {
             </div>
             <ShareModal isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />
             <RecipeViewer isOpen={isRecipeOpen} onClose={() => setIsRecipeOpen(false)} />
+            <AutoBlueprintSettingsPanel isOpen={isAutoSettingsOpen} onClose={() => setIsAutoSettingsOpen(false)} />
+            <AutoBlueprintModal isOpen={isAutoPlannerOpen} onClose={() => setIsAutoPlannerOpen(false)} />
             <Dialog.Root open={isCustomSizeOpen} onOpenChange={(event) => !event.open && setIsCustomSizeOpen(false)}>
                 <Dialog.Backdrop />
                 <Dialog.Positioner>

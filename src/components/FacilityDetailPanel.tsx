@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { getFacilityConfig } from '../config/facilities';
 import { useGameStore } from '../store/gameStore';
 import type { Connection, Item, PlacedMachine, Recipe } from '../types';
-import { canFacilityManuallySelectOutput, canFacilityRunMultipleRecipes, findMatchingRecipeByInputs, findSatisfiedRecipesByInputs, getItemByIdIncludingDynamic, getPreferredRecipeOutput, getRecipesForFacility } from '../utils/dynamicRecipes';
+import { canFacilityManuallySelectOutput, canFacilityManuallySelectRecipe, canFacilityRunMultipleRecipes, findMatchingRecipeByInputs, findSatisfiedRecipesByInputs, getItemByIdIncludingDynamic, getPreferredRecipeOutput, getRecipesForFacility } from '../utils/dynamicRecipes';
 import { getRotatedPorts } from '../utils/machineUtils';
 import { getRecipeItemsByKind, getRecipePortSlotsForFacility } from '../utils/recipePorts';
 import { getConnectionInputs } from '../utils/facilityLogistics';
@@ -63,6 +63,7 @@ export const FacilityDetailPanel = () => {
         ? getRotatedPorts(config.outputs, config.width, config.height, machine.rotation)
         : getRecipePortSlotsForFacility(config.id, 'outputs', currentRecipe);
     const canSelect = canFacilityManuallySelectOutput(config.id);
+    const canSelectRecipe = canFacilityManuallySelectRecipe(config.id);
     const skipsRecipes = config.id === 'depot-unloader' || config.id === 'fluid-tank' || config.id === 'fluid-pump' || config.id === 'acid-resistant-pump-mk-ii';
     const selectedOutput = machine.selectedMaterialId ? getItemByIdIncludingDynamic(machine.selectedMaterialId) : undefined;
     const recipeOutput = currentRecipes.length > 0 ? getPreferredRecipeOutput(currentRecipes[0]) : undefined;
@@ -174,7 +175,7 @@ export const FacilityDetailPanel = () => {
                         </Dialog.Body>
                         <Dialog.Footer justifyContent="center" gap="14px" pb="20px">
                             <Button variant="outline" className="gray-btn" onClick={handleStore}>收纳设备</Button>
-                            {!skipsRecipes && <Button variant="outline" className="yellow-btn" onClick={() => setIsRecipeOpen(true)}>查看配方</Button>}
+                            {!skipsRecipes && <Button variant="outline" className="yellow-btn" onClick={() => setIsRecipeOpen(true)}>{canSelectRecipe ? '选择采种配方' : '查看配方'}</Button>}
                         </Dialog.Footer>
                     </Dialog.Content>
                 </Dialog.Positioner>
@@ -184,10 +185,12 @@ export const FacilityDetailPanel = () => {
                 onClose={() => setIsRecipeOpen(false)}
                 facilityId={config.id}
                 selectedRecipeId={machine.selectedRecipeId}
-                onSelectRecipe={(recipeId) => {
-                    setMachineRecipe(machine.id, recipeId);
-                    setIsRecipeOpen(false);
-                }}
+                onSelectRecipe={canSelectRecipe
+                    ? (recipeId) => {
+                        setMachineRecipe(machine.id, recipeId);
+                        setIsRecipeOpen(false);
+                    }
+                    : undefined}
             />
         </>
     );
