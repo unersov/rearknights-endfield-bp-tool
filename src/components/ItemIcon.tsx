@@ -2,6 +2,7 @@ import { Box, Text } from '@chakra-ui/react';
 import type { Item } from '../types';
 import { getRarityColor } from '../utils/rarity';
 import { getItemByIdIncludingDynamic } from '../utils/dynamicRecipes';
+import { getItemImageUrl } from '../utils/assetUrls';
 
 interface ItemIconProps {
     item?: Item;
@@ -10,13 +11,10 @@ interface ItemIconProps {
     showRarityBorder?: boolean;
 }
 
-const getItemImageUrl = (item?: Item) =>
-    item ? new URL(`../assets/items/${item.id}.webp`, import.meta.url).href : null;
-
 export const ItemIcon = ({ item, label, size = 40, showRarityBorder = false }: ItemIconProps) => {
     const borderColor = showRarityBorder ? getRarityColor(item?.rarity) : undefined;
     const displayLabel = label || item?.name || '?';
-    const imageUrl = item && !item.isDynamicFilledBottle ? getItemImageUrl(item) : null;
+    const imageUrl = item && !item.isDynamicFilledBottle ? getItemImageUrl(item.id) : null;
     const bottleItem = item?.isDynamicFilledBottle ? getItemByIdIncludingDynamic(item.bottleItemId) : undefined;
     const liquidItem = item?.isDynamicFilledBottle ? getItemByIdIncludingDynamic(item.liquidItemId) : undefined;
 
@@ -37,7 +35,7 @@ export const ItemIcon = ({ item, label, size = 40, showRarityBorder = false }: I
                 <>
                     {bottleItem ? (
                         <img
-                            src={getItemImageUrl(bottleItem) || undefined}
+                            src={getItemImageUrl(bottleItem.id) || undefined}
                             alt={bottleItem.name}
                             style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                             onError={(event) => {
@@ -51,7 +49,7 @@ export const ItemIcon = ({ item, label, size = 40, showRarityBorder = false }: I
                     )}
                     {liquidItem && (
                         <img
-                            src={getItemImageUrl(liquidItem) || undefined}
+                            src={getItemImageUrl(liquidItem.id) || undefined}
                             alt={liquidItem.name}
                             style={{
                                 position: 'absolute',

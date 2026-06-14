@@ -22,8 +22,10 @@ const integerValue = (value: string) => {
 export const AutoBlueprintSettingsPanel = ({ isOpen, onClose }: AutoBlueprintSettingsPanelProps) => {
     const {
         facilityLimits,
+        protocolLimit,
         setResourceRate,
         setFacilityLimit,
+        setProtocolLimit,
         resetResourceRates,
         resetFacilityLimits,
         getEffectiveSettings,
@@ -60,6 +62,17 @@ export const AutoBlueprintSettingsPanel = ({ isOpen, onClose }: AutoBlueprintSet
                             </Box>
                             <Button size="sm" variant="outline" className="gray-btn" onClick={resetFacilityLimits}>重置设施默认值</Button>
                         </Flex>
+                        <Box bg="white" borderRadius="8px" p="12px" border="1px solid rgba(0,0,0,0.1)" mb="12px">
+                            <Text fontWeight="bold" mb="8px">协议数量</Text>
+                            <Input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={protocolLimit ?? 9999}
+                                onChange={(event) => setProtocolLimit(integerValue(event.target.value))}
+                            />
+                            <Text fontSize="xs" opacity={0.7} mt="6px">传送带和管道不消耗协议数量，其他可摆放设备都会计入。</Text>
+                        </Box>
                         <SimpleGrid columns={{ base: 1, md: 3 }} gap="12px">
                             {LIMITED_FACILITY_IDS.map(facilityId => (
                                 <Box key={facilityId} bg="white" borderRadius="8px" p="12px" border="1px solid rgba(0,0,0,0.1)">

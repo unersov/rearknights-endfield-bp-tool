@@ -209,16 +209,24 @@ export const getPreferredRecipeOutput = (recipe: Recipe): Item | undefined => {
         .sort((a, b) => outputPriority(a, preferLiquid) - outputPriority(b, preferLiquid))[0];
 };
 
-const normalizeInputIds = (ids: string[]) => ids.slice().sort().join('|');
+const normalizeInputIds = (ids: string[]) => [...new Set(ids)].sort().join('|');
+
+const getRecipeInputIds = (recipe: Recipe) =>
+    recipe.inputs
+        .map(input => input.materialId)
+        .filter((id): id is string => Boolean(id));
+
+const hasResolvedRecipeInputs = (recipe: Recipe) =>
+    recipe.inputs.every(input => Boolean(input.materialId));
 
 export const findMatchingRecipeByInputs = (facilityId: string, inputItemIds: string[]): Recipe | undefined => {
     if (inputItemIds.length === 0) return undefined;
     const inputKey = normalizeInputIds(inputItemIds);
 
     return getRecipesForFacility(facilityId).find(recipe => {
-        if (recipe.inputs.length !== inputItemIds.length || recipe.outputs.length === 0) return false;
-        if (recipe.inputs.some(input => !input.materialId)) return false;
-        return normalizeInputIds(recipe.inputs.map(input => input.materialId as string)) === inputKey;
+        if (recipe.inputs.length === 0 || recipe.outputs.length === 0) return false;
+        if (!hasResolvedRecipeInputs(recipe)) return false;
+        return normalizeInputIds(getRecipeInputIds(recipe)) === inputKey;
     });
 };
 
@@ -228,8 +236,8 @@ export const findSatisfiedRecipesByInputs = (facilityId: string, inputItemIds: s
 
     return getRecipesForFacility(facilityId).filter(recipe => {
         if (recipe.inputs.length === 0 || recipe.outputs.length === 0) return false;
-        if (recipe.inputs.some(input => !input.materialId)) return false;
-        return recipe.inputs.every(input => inputSet.has(input.materialId as string));
+        if (!hasResolvedRecipeInputs(recipe)) return false;
+        return getRecipeInputIds(recipe).every(inputId => inputSet.has(inputId));
     });
 };
 

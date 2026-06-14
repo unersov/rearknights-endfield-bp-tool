@@ -6,6 +6,7 @@ import type { Item } from '../types';
 
 export const DEFAULT_RESOURCE_RATE_PER_MINUTE = 9999;
 export const DEFAULT_FACILITY_LIMIT = 99;
+export const DEFAULT_PROTOCOL_LIMIT = 9999;
 
 export const LIMITED_FACILITY_IDS = ['forge-of-the-sky', 'depot-bus-section', 'depot-bus-port'] as const;
 export type LimitedFacilityId = typeof LIMITED_FACILITY_IDS[number];
@@ -13,14 +14,25 @@ export type LimitedFacilityId = typeof LIMITED_FACILITY_IDS[number];
 export interface AutoPlannerSettings {
     resourceRates: Record<string, number>;
     facilityLimits: Record<LimitedFacilityId, number>;
+    protocolLimit: number;
 }
 
 interface AutoPlannerSettingsState extends AutoPlannerSettings {
+    plannerProgress: AutoPlannerProgress | null;
     setResourceRate: (itemId: string, rate: number | '') => void;
     setFacilityLimit: (facilityId: LimitedFacilityId, limit: number | '') => void;
+    setProtocolLimit: (limit: number | '') => void;
+    setPlannerProgress: (progress: AutoPlannerProgress | null) => void;
     resetResourceRates: () => void;
     resetFacilityLimits: () => void;
     getEffectiveSettings: () => AutoPlannerSettings;
+}
+
+export interface AutoPlannerProgress {
+    stage: string;
+    percent: number;
+    status: 'idle' | 'running' | 'success' | 'failed';
+    error?: string;
 }
 
 export const getPlannerResourceItems = () => {
@@ -67,11 +79,19 @@ const sanitizeInteger = (value: number | '') => {
     return Math.max(0, Math.floor(value));
 };
 
+const sanitizeProtocolLimit = (value: number | '') => {
+    if (value === '') return DEFAULT_PROTOCOL_LIMIT;
+    if (!Number.isFinite(value)) return DEFAULT_PROTOCOL_LIMIT;
+    return Math.max(0, Math.floor(value));
+};
+
 export const useAutoPlannerSettingsStore = create<AutoPlannerSettingsState>()(
     persist(
         (set, get) => ({
             resourceRates: createDefaultResourceRates(),
             facilityLimits: createDefaultFacilityLimits(),
+            protocolLimit: DEFAULT_PROTOCOL_LIMIT,
+            plannerProgress: null,
             setResourceRate: (itemId, rate) => set(state => ({
                 resourceRates: {
                     ...state.resourceRates,
@@ -84,6 +104,8 @@ export const useAutoPlannerSettingsStore = create<AutoPlannerSettingsState>()(
                     [facilityId]: sanitizeInteger(limit),
                 },
             })),
+            setProtocolLimit: (limit) => set({ protocolLimit: sanitizeProtocolLimit(limit) }),
+            setPlannerProgress: (progress) => set({ plannerProgress: progress }),
             resetResourceRates: () => set({ resourceRates: createDefaultResourceRates() }),
             resetFacilityLimits: () => set({ facilityLimits: createDefaultFacilityLimits() }),
             getEffectiveSettings: () => {
@@ -93,6 +115,7 @@ export const useAutoPlannerSettingsStore = create<AutoPlannerSettingsState>()(
                 return {
                     resourceRates: { ...defaults, ...state.resourceRates },
                     facilityLimits: { ...limitDefaults, ...state.facilityLimits },
+                    protocolLimit: sanitizeProtocolLimit(state.protocolLimit),
                 };
             },
         }),

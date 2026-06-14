@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
+import { useAutoPlannerSettingsStore } from '../store/autoPlannerSettingsStore';
 import { FACILITIES } from '../config/facilities';
 import { GameMode } from '../types';
 import classNames from 'classnames';
-import { BoxSelect, Droplets, MousePointer2, Zap } from 'lucide-react';
+import { BoxSelect, Droplets, MousePointer2, WandSparkles, Zap } from 'lucide-react';
 import { Tabs } from '@chakra-ui/react';
 import './Toolbar.scss';
 import { getRarityColor } from '../utils/rarity';
+import { getFacilityImageId } from '../utils/facilityLogistics';
+import { getFacilityImageUrl } from '../utils/assetUrls';
+import { toaster } from '../utils/toaster';
 
 const TABS = [
     { id: 'core', label: '核心' },
@@ -19,10 +23,55 @@ const TABS = [
 ];
 
 export const Toolbar = () => {
-    const { selectedMachineId, selectMachine, mode, setMode } = useGameStore();
+    const {
+        selectedMachineId,
+        selectMachine,
+        mode,
+        setMode,
+        selectedMachineIds,
+        selectedConnectionIds,
+        optimizeSelection,
+    } = useGameStore();
+    const getEffectiveSettings = useAutoPlannerSettingsStore(state => state.getEffectiveSettings);
     const [activeTab, setActiveTab] = useState('production');
+    const [isOptimizing, setIsOptimizing] = useState(false);
 
     const filteredFacilities = FACILITIES.filter(facility => facility.category === activeTab);
+    const hasSelection = selectedMachineIds.length > 0 || selectedConnectionIds.length > 0;
+
+    const handleOptimizeSelection = async () => {
+        if (!hasSelection || isOptimizing) {
+            toaster.create({
+                title: '请先选择要优化的蓝图对象',
+                type: 'warning',
+                duration: 2400,
+            });
+            return;
+        }
+
+        setIsOptimizing(true);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const result = optimizeSelection(getEffectiveSettings());
+        setIsOptimizing(false);
+
+        if (!result.ok) {
+            toaster.create({
+                title: '优化失败，已保留原布局',
+                description: result.error,
+                type: 'error',
+                duration: 5200,
+            });
+            return;
+        }
+
+        const stats = result.stats;
+        toaster.create({
+            title: '优化成功',
+            description: `原占地 ${stats.oldWidth} x ${stats.oldHeight} / ${stats.oldArea}，新占地 ${stats.newWidth} x ${stats.newHeight} / ${stats.newArea}；线路 ${stats.oldLineLength} -> ${stats.newLineLength}，桥 ${stats.oldBridgeCount} -> ${stats.newBridgeCount}`,
+            type: 'success',
+            duration: 5200,
+        });
+    };
 
     return (
         <div className="toolbar-container">
@@ -88,28 +137,43 @@ export const Toolbar = () => {
                     >
                         <BoxSelect size={24} />
                     </button>
+                    <button
+                        className="tool-btn"
+                        onClick={handleOptimizeSelection}
+                        disabled={!hasSelection || isOptimizing}
+                        title={hasSelection ? '优化选中蓝图' : '请先选择要优化的蓝图对象'}
+                    >
+                        <WandSparkles size={24} />
+                    </button>
                 </div>
 
                 <div className="divider"></div>
 
                 <div className="section machines">
-                    {filteredFacilities.map(m => (
-                        <div key={m.id} className="btn-wrap" onClick={() => selectMachine(m.id)}>
-                            <button
-                                className={classNames('machine-btn', { active: selectedMachineId === m.id })}
-                                title={m.name}
-                                style={{ '--machine-color': m.color } as React.CSSProperties}
-                            >
-                                <img
-                                    className="icon"
-                                    src={new URL(`../assets/facilities/${m.id}.webp`, import.meta.url).href}
-                                    alt={m.name}
-                                    style={{ borderBottomColor: getRarityColor(m.rarity) }}
-                                />
-                                <span>{m.name}</span>
-                            </button>
-                        </div>
-                    ))}
+                    {filteredFacilities.map(m => {
+                        const imageUrl = getFacilityImageUrl(getFacilityImageId(m.id));
+                        return (
+                            <div key={m.id} className="btn-wrap" onClick={() => selectMachine(m.id)}>
+                                <button
+                                    className={classNames('machine-btn', { active: selectedMachineId === m.id })}
+                                    title={m.name}
+                                    style={{ '--machine-color': m.color } as React.CSSProperties}
+                                >
+                                    {imageUrl ? (
+                                        <img
+                                            className="icon"
+                                            src={imageUrl}
+                                            alt={m.name}
+                                            style={{ borderBottomColor: getRarityColor(m.rarity) }}
+                                        />
+                                    ) : (
+                                        <span className="icon" style={{ borderBottomColor: getRarityColor(m.rarity) }}>{m.name.slice(0, 2)}</span>
+                                    )}
+                                    <span>{m.name}</span>
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>

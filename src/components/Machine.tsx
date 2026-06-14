@@ -11,6 +11,7 @@ import { ItemIcon } from './ItemIcon';
 import { canFacilityRunMultipleRecipes, findMatchingRecipeByInputs, findSatisfiedRecipesByInputs, getItemByIdIncludingDynamic, getRecipesForFacility } from '../utils/dynamicRecipes';
 import { getRecipeItemsByKind } from '../utils/recipePorts';
 import { getConnectionInputs, getConnectionOutputs, getFacilityImageId, getNearestAnyOutputPortIndex, getNearestOutputPortIndex, isLogisticsFacility, isOutputPortConnected, shouldRotateFacilityImage } from '../utils/facilityLogistics';
+import { getFacilityImageUrl } from '../utils/assetUrls';
 import { isDepotBusSectionOperational, isWarehousePortOperational } from '../utils/placementRules';
 import { getConnectionCarriedItem } from '../utils/connectionContent';
 
@@ -21,6 +22,7 @@ interface MachineProps {
 
 export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
     const config = getFacilityConfig(data.machineId);
+    const facilityImageUrl = getFacilityImageUrl(getFacilityImageId(config?.id || data.machineId));
     const { mode, selectedMachineId, startWiring, wiringSource, commitWiring, updateWiringPreview, isWiring, zoom, pickupMachine, machines, connections, openFacilityDetail, openMaterialSelector } = useGameStore();
     const pressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -286,12 +288,16 @@ export const Machine: React.FC<MachineProps> = ({ data, isSelected }) => {
             onClick={handleClick}
         >
             <div className="machine-body">
-                <img
-                    className={classNames('facility-image', { 'rotated-logistics-icon': shouldRotateFacilityImage(config.id) })}
-                    src={new URL(`../assets/facilities/${getFacilityImageId(config.id)}.webp`, import.meta.url).href}
-                    alt={config.name}
-                    style={shouldRotateFacilityImage(config.id) ? { '--facility-rotation': `${data.rotation * 90}deg` } as React.CSSProperties : undefined}
-                />
+                {facilityImageUrl ? (
+                    <img
+                        className={classNames('facility-image', { 'rotated-logistics-icon': shouldRotateFacilityImage(config.id) })}
+                        src={facilityImageUrl}
+                        alt={config.name}
+                        style={shouldRotateFacilityImage(config.id) ? { '--facility-rotation': `${data.rotation * 90}deg` } as React.CSSProperties : undefined}
+                    />
+                ) : (
+                    <div className="facility-image facility-image-fallback">{config.name.slice(0, 2)}</div>
+                )}
 
                 <div
                     className="machine-label"

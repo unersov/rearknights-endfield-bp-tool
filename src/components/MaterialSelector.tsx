@@ -6,6 +6,8 @@ import { ItemIcon } from './ItemIcon';
 import { canFacilityRunMultipleRecipes, canFacilityManuallySelectOutput, findSatisfiedRecipesByInputs, getManualSelectableItemsForFacility } from '../utils/dynamicRecipes';
 import { getRecipeItemsByKind } from '../utils/recipePorts';
 import { getConnectionCarriedItem } from '../utils/connectionContent';
+import { analyzeReactorCrucible, REACTOR_CRUCIBLE_IDS } from '../utils/reactorCrucible';
+import { getRotatedPorts } from '../utils/machineUtils';
 
 export const MaterialSelector: React.FC = () => {
     const { materialSelectorMachineId, materialSelectorOutputIndex, machines, connections, closeMaterialSelector, setMachineMaterial } = useGameStore();
@@ -26,6 +28,13 @@ export const MaterialSelector: React.FC = () => {
 
     const getInstanceSelectableItems = () => {
         if (!canFacilityManuallySelectOutput(config.id) || !machine) return [];
+        if (REACTOR_CRUCIBLE_IDS.has(config.id)) {
+            const analysis = analyzeReactorCrucible(config.id, machine.reactorSlotItemIds || []);
+            const outputIndex = materialSelectorOutputIndex ?? 0;
+            const rotatedOutputs = getRotatedPorts(config.outputs, config.width, config.height, machine.rotation);
+            const port = rotatedOutputs[outputIndex];
+            return port?.kind === 'pipe' ? analysis.liquidOutputs : analysis.solidOutputs;
+        }
         if (!canFacilityRunMultipleRecipes(config.id)) return getManualSelectableItemsForFacility(config.id);
 
         const inputItems = connections

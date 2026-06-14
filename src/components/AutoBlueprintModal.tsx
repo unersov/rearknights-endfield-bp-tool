@@ -51,6 +51,8 @@ const parseRate = (value: string) => {
     return Number.isFinite(parsed) ? Math.max(0, parsed) : 1;
 };
 
+const defaultTargetRate = (item: Item) => item.state === 'liquid' ? 120 : 30;
+
 export const AutoBlueprintModal = ({ isOpen, onClose }: AutoBlueprintModalProps) => {
     const [targets, setTargets] = useState<TargetDraft[]>([]);
     const [search, setSearch] = useState('');
@@ -58,6 +60,8 @@ export const AutoBlueprintModal = ({ isOpen, onClose }: AutoBlueprintModalProps)
     const [report, setReport] = useState<AutoPlannerReport | null>(null);
     const [error, setError] = useState('');
     const getEffectiveSettings = useAutoPlannerSettingsStore(state => state.getEffectiveSettings);
+    const plannerProgress = useAutoPlannerSettingsStore(state => state.plannerProgress);
+    const setPlannerProgress = useAutoPlannerSettingsStore(state => state.setPlannerProgress);
     const { machines, connections, gridWidth, gridHeight, applyAutoPlan } = useGameStore();
     const items = useMemo(selectableItems, []);
     const filteredItems = useMemo(() => {
@@ -75,39 +79,85 @@ export const AutoBlueprintModal = ({ isOpen, onClose }: AutoBlueprintModalProps)
     const addTarget = (item: Item) => {
         setTargets(prev => prev.some(target => target.itemId === item.id)
             ? prev
-            : [...prev, { itemId: item.id, ratePerMinute: 1 }]
+            : [...prev, { itemId: item.id, ratePerMinute: defaultTargetRate(item) }]
         );
         setIsPicking(false);
         setSearch('');
     };
 
-    const runPlanner = () => {
+    const updateProgress = (stage: string, percent: number) => {
+        setPlannerProgress({ stage, percent, status: 'running' });
+    };
+
+    const yieldToUi = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+    const loadRegressionTargets = () => {
+        setTargets([
+            { itemId: 'sc_wulin_battery', ratePerMinute: 0.01 },
+            { itemId: 'cuprium_component', ratePerMinute: 0.01 },
+        ]);
+        setReport(null);
+        setError('');
+        setPlannerProgress(null);
+    };
+
+    const runPlanner = async () => {
         setError('');
         setReport(null);
+        updateProgress('分析目标产物', 5);
+        await yieldToUi();
+
         const plannerTargets: AutoPlannerTarget[] = targets
             .filter(target => target.ratePerMinute > 0)
             .map(target => ({ itemId: target.itemId, ratePerMinute: target.ratePerMinute }));
         if (plannerTargets.length === 0) {
-            setError('请先添加至少一个目标物品，并设置大于 0 的目标产量。');
+            const message = '请先添加至少一个目标物品，并设置大于 0 的目标产量。';
+            setError(message);
+            setPlannerProgress({ stage: '失败', percent: 100, status: 'failed', error: message });
             return;
         }
 
         try {
             const settings = getEffectiveSettings();
+            updateProgress('展开配方链', 16);
+            await yieldToUi();
             const graphResult = resolveProductionGraph(plannerTargets, settings, machines, connections);
             if (!graphResult.ok) {
                 setError(graphResult.error);
+                setPlannerProgress({ stage: '失败', percent: 100, status: 'failed', error: graphResult.error });
                 return;
             }
-            const layoutResult = buildAutoLayout(graphResult.graph, settings, machines, connections, gridWidth, gridHeight);
+
+            updateProgress('计算产率', 28);
+            await yieldToUi();
+            updateProgress('分配设施数量', 38);
+            await yieldToUi();
+            let layoutResult = await buildAutoLayout(graphResult.graph, settings, machines, connections, gridWidth, gridHeight, updateProgress);
+            if (!layoutResult.ok) {
+                updateProgress('连接物流线路', 40);
+                await yieldToUi();
+                layoutResult = await buildAutoLayout(graphResult.graph, settings, machines, connections, gridWidth, gridHeight, updateProgress);
+            }
+            for (let retry = 2; !layoutResult.ok && retry <= 4; retry += 1) {
+                updateProgress(`Retrying layout ${retry}/4`, 40 + retry * 8);
+                await yieldToUi();
+                layoutResult = await buildAutoLayout(graphResult.graph, settings, machines, connections, gridWidth, gridHeight, updateProgress);
+            }
             if (!layoutResult.ok) {
                 setError(layoutResult.error);
+                setPlannerProgress({ stage: '失败', percent: 100, status: 'failed', error: layoutResult.error });
                 return;
             }
+
+            updateProgress('校验蓝图', 96);
+            await yieldToUi();
             applyAutoPlan(layoutResult.result.machines, layoutResult.result.connections, Math.max(200, gridWidth), Math.max(200, gridHeight));
             setReport(layoutResult.result.report);
+            setPlannerProgress({ stage: '完成', percent: 100, status: 'success' });
         } catch (event) {
-            setError(event instanceof Error ? event.message : '自动规划失败：未知错误。');
+            const message = event instanceof Error ? event.message : '自动规划失败：未知错误。';
+            setError(message);
+            setPlannerProgress({ stage: '失败', percent: 100, status: 'failed', error: message });
         }
     };
 
@@ -122,12 +172,15 @@ export const AutoBlueprintModal = ({ isOpen, onClose }: AutoBlueprintModalProps)
                     <Dialog.Header borderBottom="1px solid rgba(0,0,0,0.12)">
                         <Box>
                             <Dialog.Title>自动蓝图规划</Dialog.Title>
-                            <Text fontSize="sm" opacity={0.75}>选择目标物品后，会在 200 x 200 范围内生成第一版产线。</Text>
+                            <Text fontSize="sm" opacity={0.75}>选择目标物品后，会按产率、协议数量、供电和物流校验生成产线。</Text>
                         </Box>
                     </Dialog.Header>
                     <Dialog.Body maxH="72vh" overflowY="auto">
                         <Flex justify="space-between" align="center" mb="12px">
                             <Text fontSize="lg" fontWeight="bold">目标物品</Text>
+                            <Button size="sm" variant="outline" className="gray-btn" onClick={loadRegressionTargets}>
+                                中容武陵电池 + 赤铜装备原件
+                            </Button>
                             <Button size="sm" variant="outline" className="yellow-btn" onClick={() => setIsPicking(true)}>
                                 <Plus size={16} /> 添加物品
                             </Button>
@@ -194,6 +247,24 @@ export const AutoBlueprintModal = ({ isOpen, onClose }: AutoBlueprintModalProps)
                             </Box>
                         )}
 
+                        {plannerProgress && (
+                            <Box mt="16px" bg="white" borderRadius="8px" p="14px" border="1px solid rgba(0,0,0,0.1)">
+                                <Flex justify="space-between" align="center" mb="8px">
+                                    <Text fontWeight="bold">{plannerProgress.stage}</Text>
+                                    <Text fontSize="sm" opacity={0.75}>{Math.round(plannerProgress.percent)}%</Text>
+                                </Flex>
+                                <Box h="10px" bg="rgba(0,0,0,0.12)" borderRadius="999px" overflow="hidden">
+                                    <Box
+                                        h="100%"
+                                        width={`${Math.max(0, Math.min(100, plannerProgress.percent))}%`}
+                                        bg={plannerProgress.status === 'failed' ? '#d64532' : 'var(--green)'}
+                                        transition="width 160ms ease"
+                                    />
+                                </Box>
+                                {plannerProgress.error && <Text mt="8px" fontSize="sm" color="#8a1f11">{plannerProgress.error}</Text>}
+                            </Box>
+                        )}
+
                         {error && (
                             <Box mt="16px" bg="#fff1f0" color="#8a1f11" border="1px solid #ffb3a7" borderRadius="8px" p="12px">
                                 <Text fontWeight="bold">{error}</Text>
@@ -204,7 +275,7 @@ export const AutoBlueprintModal = ({ isOpen, onClose }: AutoBlueprintModalProps)
                     </Dialog.Body>
                     <Dialog.Footer>
                         <Button variant="outline" className="gray-btn" onClick={onClose}>关闭</Button>
-                        <Button variant="outline" className="yellow-btn" onClick={runPlanner}>开始规划并摆放</Button>
+                        <Button variant="outline" className="yellow-btn" onClick={runPlanner} disabled={plannerProgress?.status === 'running'}>开始规划并摆放</Button>
                     </Dialog.Footer>
                 </Dialog.Content>
             </Dialog.Positioner>
@@ -216,13 +287,13 @@ const ReportView = ({ report }: { report: AutoPlannerReport }) => (
     <Box mt="16px" bg="white" borderRadius="8px" p="14px" border="1px solid rgba(0,0,0,0.1)">
         <Flex align="center" gap="8px" mb="10px">
             <Text fontWeight="bold">规划完成</Text>
-            <Badge>第一版</Badge>
+            <Badge>自动生成</Badge>
         </Flex>
         <ReportList title="目标物品" items={report.targets} />
         <ReportList title="使用配方" items={report.recipes} />
         <ReportList title="放置设施" items={Object.entries(report.facilities).map(([name, count]) => `${name} x ${count}`)} />
         <ReportList title="受限设施使用" items={Object.entries(report.limitedFacilities).map(([name, count]) => `${name} x ${count}`)} />
-        <ReportList title="主仓库取出" items={report.warehouseSources} />
+        <ReportList title="仓库取出" items={report.warehouseSources} />
         <ReportList title="产线生产" items={report.producedItems} />
         {report.warnings.length > 0 && <ReportList title="提示" items={report.warnings} />}
     </Box>

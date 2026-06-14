@@ -1,13 +1,15 @@
 import { FACILITIES } from '../config/facilities';
 import type { Connection, ConnectionKind, Direction, FacilityConfig, PlacedMachine, Point, Side } from '../types';
 import { getItemByIdIncludingDynamic } from '../utils/dynamicRecipes';
-import { checkCollision, getVectorFromSide } from '../utils/gridUtils';
-import { getRotatedDimensions } from '../utils/machineUtils';
+import { checkCollision, findPath, getVectorFromSide } from '../utils/gridUtils';
+import { getRotatedDimensions, isMachinePowered } from '../utils/machineUtils';
 import { checkPlacementRule, isRectInsideCore, isRectInsideExpandedBounds } from '../utils/placementRules';
-import { getConnectionInputs, getConnectionOutputs, isInputPortConnected, isOutputPortConnected } from '../utils/facilityLogistics';
+import { getConnectionInputs, getConnectionOutputs, getNearestInputPortIndex, getNearestOutputPortIndex, isInputPortConnected, isOutputPortConnected } from '../utils/facilityLogistics';
 import type { AutoPlannerSettings } from '../store/autoPlannerSettingsStore';
 import type { ProductionGraph, ProductionNode } from './recipeResolver';
 import { findPlantCycleRecipes, getItemLabel } from './recipeResolver';
+import { getConnectionCarriedItem } from '../utils/connectionContent';
+import { getPreferredRecipeOutput, getRecipesForFacility } from '../utils/dynamicRecipes';
 
 export interface AutoPlannerReport {
     targets: string[];
@@ -25,11 +27,33 @@ export interface AutoLayoutResult {
     report: AutoPlannerReport;
 }
 
+export interface BlueprintOptimizationStats {
+    oldWidth: number;
+    oldHeight: number;
+    oldArea: number;
+    newWidth: number;
+    newHeight: number;
+    newArea: number;
+    oldLineLength: number;
+    newLineLength: number;
+    oldBridgeCount: number;
+    newBridgeCount: number;
+}
+
+export interface BlueprintOptimizationResult {
+    machines: PlacedMachine[];
+    connections: Connection[];
+    selectedMachineIds: string[];
+    selectedConnectionIds: string[];
+    stats: BlueprintOptimizationStats;
+}
+
 interface ProviderRef {
     machineId: string;
     outputPortIndex?: number;
 }
 
+type AutoLayoutProgress = (stage: string, percent: number) => void;
 type PlaceResult = { machine: PlacedMachine | null; error: string | null };
 type MachineRect = { x: number; y: number; width: number; height: number };
 type ScoredConnectionCandidate = {
@@ -81,11 +105,40 @@ const SCORE_WEIGHTS = {
 
 const getFacility = (facilityId: string) => FACILITIES.find(facility => facility.id === facilityId);
 
+const yieldToBrowser = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+const reportProgress = async (onProgress: AutoLayoutProgress | undefined, stage: string, percent: number) => {
+    onProgress?.(stage, percent);
+    await yieldToBrowser();
+};
+
 const itemKind = (itemId: string): ConnectionKind =>
     getItemByIdIncludingDynamic(itemId)?.state === 'liquid' ? 'pipe' : 'belt';
 
 const pointKey = (point: Point) => `${point.x},${point.y}`;
 const isSamePoint = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
+
+const expandPath = (path: Point[]) => {
+    if (path.length === 0) return [];
+    const expanded: Point[] = [{ ...path[0] }];
+    for (let index = 1; index < path.length; index += 1) {
+        const from = path[index - 1];
+        const to = path[index];
+        if (from.x !== to.x && from.y !== to.y) {
+            expanded.push({ ...to });
+            continue;
+        }
+        const dx = Math.sign(to.x - from.x);
+        const dy = Math.sign(to.y - from.y);
+        const steps = Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
+        for (let step = 1; step <= steps; step += 1) {
+            expanded.push({ x: from.x + dx * step, y: from.y + dy * step });
+        }
+    }
+    return expanded;
+};
+
+const interiorPathPoints = (path: Point[]) => expandPath(path).slice(1, -1);
 
 const machineCenter = (machine: PlacedMachine) => {
     const facility = getFacility(machine.machineId);
@@ -114,7 +167,7 @@ const rectContainsPoint = (rect: MachineRect, point: Point) =>
     point.y < rect.y + rect.height;
 
 const connectionPathIntersectsRect = (rect: MachineRect, connections: Connection[]) =>
-    connections.some(connection => connection.path.some(point => rectContainsPoint(rect, point)));
+    connections.some(connection => expandPath(connection.path).some(point => rectContainsPoint(rect, point)));
 
 const directionAlignmentPenalty = (side: Side, from: Point, to: Point) => {
     const vector = getVectorFromSide(side);
@@ -179,6 +232,7 @@ const makeMachine = (
 const cloneMachine = (machine: PlacedMachine): PlacedMachine => ({
     ...machine,
     selectedOutputItemIds: machine.selectedOutputItemIds ? { ...machine.selectedOutputItemIds } : machine.selectedOutputItemIds,
+    reactorSlotItemIds: machine.reactorSlotItemIds ? [...machine.reactorSlotItemIds] : machine.reactorSlotItemIds,
 });
 
 const cloneConnection = (connection: Connection): Connection => ({
@@ -385,7 +439,7 @@ const addBridgeForPathOverlaps = (
     connections
         .filter(connection => (connection.kind || 'belt') === kind)
         .forEach(connection => {
-            connection.path.slice(1, -1).forEach(point => {
+            interiorPathPoints(connection.path).forEach(point => {
                 const key = pointKey(point);
                 const list = occupied.get(key) || [];
                 list.push(connection);
@@ -393,14 +447,11 @@ const addBridgeForPathOverlaps = (
             });
         });
 
-    for (let index = 1; index < path.length - 1; index += 1) {
-        const point = path[index];
+    for (const point of interiorPathPoints(path)) {
         const existingConnectionsAtPoint = occupied.get(pointKey(point));
         if (!existingConnectionsAtPoint) continue;
 
-        const newDirection = isStraightThroughPathPoint(path, index)
-            ? directionBetween(path[index - 1], path[index])
-            : null;
+        const newDirection = pathDirectionAtPoint(path, point);
         if (!newDirection) return false;
 
         let needsBridge = false;
@@ -447,18 +498,13 @@ const directionBetween = (from: Point, to: Point): 'h' | 'v' | null => {
     return null;
 };
 
-const isStraightThroughPathPoint = (path: Point[], index: number) => {
-    if (index <= 0 || index >= path.length - 1) return false;
-    const before = directionBetween(path[index - 1], path[index]);
-    const after = directionBetween(path[index], path[index + 1]);
-    return before !== null && before === after;
-};
-
 const pathDirectionAtPoint = (path: Point[], point: Point) => {
-    const index = path.findIndex(candidate => isSamePoint(candidate, point));
-    if (index <= 0 || index >= path.length - 1) return null;
-    if (!isStraightThroughPathPoint(path, index)) return null;
-    return directionBetween(path[index - 1], path[index]);
+    const expanded = expandPath(path);
+    const index = expanded.findIndex(candidate => isSamePoint(candidate, point));
+    if (index <= 0 || index >= expanded.length - 1) return null;
+    const before = directionBetween(expanded[index - 1], expanded[index]);
+    const after = directionBetween(expanded[index], expanded[index + 1]);
+    return before && before === after ? before : null;
 };
 
 const pointInsideBlockedMachine = (
@@ -481,14 +527,14 @@ const countPathOverlaps = (path: Point[], connections: Connection[], kind: Conne
     const occupied = new Set<string>();
     connections
         .filter(connection => (connection.kind || 'belt') === kind)
-        .forEach(connection => connection.path.slice(1, -1).forEach(point => occupied.add(pointKey(point))));
-    return path.slice(1, -1).filter(point => occupied.has(pointKey(point))).length;
+        .forEach(connection => interiorPathPoints(connection.path).forEach(point => occupied.add(pointKey(point))));
+    return interiorPathPoints(path).filter(point => occupied.has(pointKey(point))).length;
 };
 
 const pathScore = (path: Point[], connections: Connection[] = [], kind: ConnectionKind = 'belt') => {
     const turns = pathTurns(path);
     if (turns > MAX_PATH_TURNS) return SCORE_WEIGHTS.invalid + turns * SCORE_WEIGHTS.turn;
-    const length = Math.max(0, path.length - 1);
+    const length = Math.max(0, expandPath(path).length - 1);
     const detour = Math.max(0, length - pathManhattan(path));
     return length * SCORE_WEIGHTS.lineLength +
         turns * SCORE_WEIGHTS.turn +
@@ -498,7 +544,7 @@ const pathScore = (path: Point[], connections: Connection[] = [], kind: Connecti
 
 const hasRepeatedPoint = (path: Point[]) => {
     const seen = new Set<string>();
-    for (const point of path) {
+    for (const point of expandPath(path)) {
         const key = pointKey(point);
         if (seen.has(key)) return true;
         seen.add(key);
@@ -524,31 +570,29 @@ const validateConnectionGeometry = (
     if (pathTurns(connection.path) > MAX_PATH_TURNS) {
         return `${kind} route has more than ${MAX_PATH_TURNS} turns`;
     }
+    if (hasRepeatedPoint(connection.path)) {
+        return `${kind} route loops back over itself`;
+    }
 
-    for (let index = 1; index < connection.path.length - 1; index += 1) {
-        const point = connection.path[index];
+    for (const point of interiorPathPoints(connection.path)) {
         const machinesAtPoint = machines.filter(machine => isPointInsideMachine(point, machine));
         for (const machine of machinesAtPoint) {
             if (endpointIds.has(machine.id)) return `${kind} route crosses endpoint facility footprint`;
             if (machine.machineId !== bridgeId) return `${kind} route overlaps ${getFacility(machine.machineId)?.name || machine.machineId}`;
-            if (!isStraightThroughPathPoint(connection.path, index)) return `${kind} bridge is used as a turn`;
+            if (!pathDirectionAtPoint(connection.path, point)) return `${kind} bridge is used as a turn`;
         }
 
         const overlappingConnections = connections.filter(candidate =>
             candidate.id !== connection.id &&
-            candidate.path.some((candidatePoint, candidateIndex) =>
-                candidateIndex > 0 &&
-                candidateIndex < candidate.path.length - 1 &&
-                isSamePoint(candidatePoint, point)
-            )
+            interiorPathPoints(candidate.path).some(candidatePoint => isSamePoint(candidatePoint, point))
         );
 
         for (const overlappingConnection of overlappingConnections) {
             const overlappingKind = overlappingConnection.kind || 'belt';
+            if (overlappingKind !== kind) continue;
             const existingDirection = pathDirectionAtPoint(overlappingConnection.path, point);
             const currentDirection = pathDirectionAtPoint(connection.path, point);
             if (!existingDirection || !currentDirection) return `${kind} route overlaps another route at a turn`;
-            if (overlappingKind !== kind) return `${kind} route overlaps ${overlappingKind}`;
             if (existingDirection === currentDirection) return `${kind} route stacks on another ${kind} route`;
             const hasBridge = machinesAtPoint.some(machine => machine.machineId === bridgeId);
             if (!hasBridge) return `${kind} route crosses another route without a bridge`;
@@ -590,7 +634,7 @@ const getOccupiedLayoutStats = (machines: PlacedMachine[], connections: Connecti
             for (let x = rect.x; x < rect.x + rect.width; x += 1) addPoint({ x, y });
         }
     });
-    connections.forEach(connection => connection.path.forEach(addPoint));
+    connections.forEach(connection => expandPath(connection.path).forEach(addPoint));
 
     if (occupied.size === 0 || minX === Infinity) return { area: 0, occupied: 0, empty: 0, coverage: 1 };
     const area = Math.max(1, (maxX - minX) * (maxY - minY));
@@ -612,14 +656,14 @@ const layoutScore = (machines: PlacedMachine[], connections: Connection[]) => {
 };
 
 const connectionFillsRelatedGap = (connection: Connection, fromRect: MachineRect, toRect: MachineRect) => {
-    const length = Math.max(0, connection.path.length - 1);
+    const length = Math.max(0, expandPath(connection.path).length - 1);
     const manhattan = pathManhattan(connection.path);
     if (pathTurns(connection.path) > MAX_PATH_TURNS || length > manhattan + 4) return false;
     const minX = Math.min(fromRect.x, toRect.x);
     const maxX = Math.max(fromRect.x + fromRect.width - 1, toRect.x + toRect.width - 1);
     const minY = Math.min(fromRect.y, toRect.y);
     const maxY = Math.max(fromRect.y + fromRect.height - 1, toRect.y + toRect.height - 1);
-    return connection.path.slice(1, -1).some(point =>
+    return interiorPathPoints(connection.path).some(point =>
         point.x >= minX &&
         point.x <= maxX &&
         point.y >= minY &&
@@ -657,7 +701,7 @@ const findOccupiedAwarePathCandidate = (
     const lineBlocked = new Set<string>();
     connections
         .filter(connection => (connection.kind || 'belt') === kind)
-        .forEach(connection => connection.path.forEach(point => lineBlocked.add(pointKey(point))));
+        .forEach(connection => interiorPathPoints(connection.path).forEach(point => lineBlocked.add(pointKey(point))));
     const allowedPointOwners = new Map<string, Set<string>>([
         [pointKey(realStart), new Set(machines.filter(machine => isPointInsideMachine(start, machine)).map(machine => machine.id))],
         [pointKey(realEnd), new Set(machines.filter(machine => isPointInsideMachine(end, machine)).map(machine => machine.id))],
@@ -672,7 +716,7 @@ const findOccupiedAwarePathCandidate = (
 
     const isBlocked = (point: Point) => {
         if (!isInsideBounds(point)) return true;
-        if (lineBlocked.has(pointKey(point))) return true;
+        if (!isSamePoint(point, realStart) && !isSamePoint(point, realEnd) && lineBlocked.has(pointKey(point))) return true;
         const allowedOwners = allowedPointOwners.get(pointKey(point));
         if (allowedOwners) {
             return machines.some(machine => !allowedOwners.has(machine.id) && isPointInsideMachine(point, machine));
@@ -692,7 +736,7 @@ const findOccupiedAwarePathCandidate = (
     nodes.set(pointKey(realStart), open[0]);
     const closed = new Set<string>();
 
-    for (let iterations = 0; open.length > 0 && iterations < 2500; iterations += 1) {
+    for (let iterations = 0; open.length > 0 && iterations < 900; iterations += 1) {
         open.sort((a, b) => a.f - b.f);
         const current = open.shift()!;
         const currentKey = pointKey(current);
@@ -765,6 +809,10 @@ const findOccupiedAwarePathCandidates = (
     if (isSamePoint(realStart, realEnd)) {
         return [[start, realStart, end].filter((point, index, list) => index === 0 || !isSamePoint(point, list[index - 1]))];
     }
+    const lineBlocked = new Set<string>();
+    connections
+        .filter(connection => (connection.kind || 'belt') === kind)
+        .forEach(connection => interiorPathPoints(connection.path).forEach(point => lineBlocked.add(pointKey(point))));
     const allowedPointOwners = new Map<string, Set<string>>([
         [pointKey(realStart), new Set(machines.filter(machine => isPointInsideMachine(start, machine)).map(machine => machine.id))],
         [pointKey(realEnd), new Set(machines.filter(machine => isPointInsideMachine(end, machine)).map(machine => machine.id))],
@@ -777,6 +825,7 @@ const findOccupiedAwarePathCandidates = (
     };
     const isBlocked = (point: Point) => {
         if (!isInsideBounds(point)) return true;
+        if (!isSamePoint(point, realStart) && !isSamePoint(point, realEnd) && lineBlocked.has(pointKey(point))) return true;
         const allowedOwners = allowedPointOwners.get(pointKey(point));
         if (allowedOwners) {
             return machines.some(machine => !allowedOwners.has(machine.id) && isPointInsideMachine(point, machine));
@@ -837,6 +886,67 @@ const findOccupiedAwarePathCandidates = (
         if (!path || pathTurns(path) > MAX_PATH_TURNS) return;
         unique.set(path.map(pointKey).join('|'), path);
     });
+
+    const laneOffsets = [3, 5, 8, 12, 16, 22, 30, 40, 55, 70];
+    const laneYValues = laneOffsets.flatMap(offset => [
+        realStart.y - offset,
+        realStart.y + offset,
+        realEnd.y - offset,
+        realEnd.y + offset,
+    ]).concat([2, 5, gridHeight - 6, gridHeight - 12]);
+    const laneXValues = laneOffsets.flatMap(offset => [
+        realStart.x - offset,
+        realStart.x + offset,
+        realEnd.x - offset,
+        realEnd.x + offset,
+    ]).concat([2, 5, gridWidth - 6, gridWidth - 12]);
+    const addLaneCandidate = (points: Point[]) => {
+        const corePath = buildCorePath(points);
+        if (!corePath) return;
+        if (corePath.some(isBlocked)) return;
+        const path = [start, ...corePath, end].filter((point, index, list) => index === 0 || !isSamePoint(point, list[index - 1]));
+        if (!hasRepeatedPoint(path) && pathTurns(path) <= MAX_PATH_TURNS) {
+            unique.set(path.map(pointKey).join('|'), path);
+        }
+    };
+    for (const laneY of laneYValues) {
+        const lanePointA = { x: realStart.x, y: laneY };
+        const lanePointB = { x: realEnd.x, y: laneY };
+        addLaneCandidate([realStart, lanePointA, lanePointB, realEnd]);
+    }
+    for (const laneX of laneXValues) {
+        const lanePointA = { x: laneX, y: realStart.y };
+        const lanePointB = { x: laneX, y: realEnd.y };
+        addLaneCandidate([realStart, lanePointA, lanePointB, realEnd]);
+    }
+    for (const laneY of [2, 5, gridHeight - 6, gridHeight - 12]) {
+        for (const laneX of [2, 5, gridWidth - 6, gridWidth - 12]) {
+            addLaneCandidate([
+                realStart,
+                { x: laneX, y: realStart.y },
+                { x: laneX, y: laneY },
+                { x: realEnd.x, y: laneY },
+                realEnd,
+            ]);
+        }
+    }
+
+    if (unique.size === 0) {
+        const fallbackPath = findPath(start, end, machines, startSide, endSide, kind);
+        const fallbackConnection: Connection = {
+            id: 'fallback',
+            fromOriginal: { machineId: '', portIndex: 0 },
+            toOriginal: { machineId: '', portIndex: 0 },
+            path: fallbackPath || [],
+            kind,
+        };
+        if (fallbackPath &&
+            !hasRepeatedPoint(fallbackPath) &&
+            pathTurns(fallbackPath) <= MAX_PATH_TURNS &&
+            !validateConnectionGeometry(fallbackConnection, machines, connections)) {
+            unique.set(fallbackPath.map(pointKey).join('|'), fallbackPath);
+        }
+    }
     return [...unique.values()].sort((a, b) => pathScore(a, connections, kind) - pathScore(b, connections, kind)).slice(0, 8);
 };
 
@@ -848,7 +958,8 @@ const buildConnection = (
     connections: Connection[],
     gridWidth: number,
     gridHeight: number,
-    forcedOutputPortIndex?: number
+    forcedOutputPortIndex?: number,
+    allowRelay = true
 ): { connection: Connection | null; error: string | null } => {
     const kind = itemKind(itemId);
     const fromConfig = getFacility(from.machineId);
@@ -860,6 +971,7 @@ const buildConnection = (
     const fromRotations = hasAnyConnection(from.id, connections) || forcedOutputPortIndex !== undefined ? [from.rotation] : ROTATIONS;
     const toRotations = hasAnyConnection(to.id, connections) ? [to.rotation] : ROTATIONS;
     const attempts: string[] = [];
+    const deadline = Date.now() + 2500;
 
     const branchFromExistingOutput = () => {
         const splitterId = kind === 'pipe' ? 'pipe-splitter' : 'splitter';
@@ -881,15 +993,11 @@ const buildConnection = (
             : undefined;
         if (!originalTarget) return null;
 
-        const candidates = originalConnection.path
+        const expandedOriginalPath = expandPath(originalConnection.path);
+        const candidates = expandedOriginalPath
             .slice(1, -1)
             .map((point, index) => ({ point, pathIndex: index + 1 }))
             .filter(candidate => !pointHasMachine(candidate.point, machines))
-            .filter(candidate => {
-                const fromRect = machineRect(from);
-                const splitterRect = { x: candidate.point.x, y: candidate.point.y, width: 1, height: 1 };
-                return !fromRect || rectEdgeGap(fromRect, splitterRect) < 5;
-            })
             .sort((a, b) => {
                 const aToTarget = Math.abs(a.point.x - to.x) + Math.abs(a.point.y - to.y);
                 const bToTarget = Math.abs(b.point.x - to.x) + Math.abs(b.point.y - to.y);
@@ -898,31 +1006,55 @@ const buildConnection = (
                 return (aToTarget + aToSource * 3) - (bToTarget + bToSource * 3);
             });
 
-        for (const candidate of candidates.slice(0, 12)) {
+        for (const candidate of candidates.slice(0, 18)) {
+            if (Date.now() > deadline) {
+                attempts.push('branch routing timed out');
+                return null;
+            }
             const startMachineCount = machines.length;
             const connectionSnapshot = connections.slice();
             const branch = makeMachine(splitterId, candidate.point.x, candidate.point.y);
             if (!canPlace(splitter, branch, machines, gridWidth, gridHeight)) continue;
             machines.push(branch);
 
-            connections.splice(existing.index, 1);
+            const previousPoint = expandedOriginalPath[candidate.pathIndex - 1];
+            const nextPoint = expandedOriginalPath[candidate.pathIndex + 1];
+            const branchInputIndex = getNearestInputPortIndex(splitter, branch, kind, previousPoint);
+            const branchOriginalOutputIndex = getNearestOutputPortIndex(splitter, branch, kind, nextPoint);
+            if (branchInputIndex === -1 || branchOriginalOutputIndex === -1) {
+                machines.splice(startMachineCount);
+                connections.splice(0, connections.length, ...connectionSnapshot);
+                continue;
+            }
 
-            const sourceToBranch = buildConnection(
-                from,
-                branch,
-                itemId,
-                machines,
-                connections,
-                gridWidth,
-                gridHeight,
-                originalConnection.fromOriginal.portIndex
-            );
-            const branchToOriginal = sourceToBranch.connection
-                ? buildConnection(branch, originalTarget, itemId, machines, connections, gridWidth, gridHeight)
-                : { connection: null };
-            const branchToNew = branchToOriginal.connection
-                ? buildConnection(branch, to, itemId, machines, connections, gridWidth, gridHeight)
-                : { connection: null };
+            const sourceToBranch: Connection = {
+                ...originalConnection,
+                id: crypto.randomUUID(),
+                toOriginal: { machineId: branch.id, portIndex: branchInputIndex },
+                path: compactPath(expandedOriginalPath.slice(0, candidate.pathIndex + 1)),
+                kind,
+            };
+            const branchToOriginal: Connection = {
+                ...originalConnection,
+                id: crypto.randomUUID(),
+                fromOriginal: { machineId: branch.id, portIndex: branchOriginalOutputIndex },
+                path: compactPath(expandedOriginalPath.slice(candidate.pathIndex)),
+                kind,
+            };
+            const sourceGeometryError = validateConnectionGeometry(sourceToBranch, machines, connections.filter(connection => connection.id !== originalConnection.id));
+            const originalGeometryError = sourceGeometryError
+                ? sourceGeometryError
+                : validateConnectionGeometry(branchToOriginal, machines, [...connections.filter(connection => connection.id !== originalConnection.id), sourceToBranch]);
+            if (originalGeometryError) {
+                machines.splice(startMachineCount);
+                connections.splice(0, connections.length, ...connectionSnapshot);
+                continue;
+            }
+
+            connections.splice(existing.index, 1);
+            connections.push(sourceToBranch, branchToOriginal);
+
+            const branchToNew = buildConnection(branch, to, itemId, machines, connections, gridWidth, gridHeight, undefined, false);
 
             if (branchToNew.connection) return branchToNew.connection;
 
@@ -938,12 +1070,18 @@ const buildConnection = (
         const fromCenter = machineCenter(from);
         const outputs = getConnectionOutputs(fromConfig, from, kind);
         const inputs = getConnectionInputs(toConfig, to, kind);
-        const outputCandidates = outputs
+        const allOutputCandidates = outputs
             .map((port, index) => ({ port, index, distance: Math.abs(from.x + port.x - toCenter.x) + Math.abs(from.y + port.y - toCenter.y) }))
             .filter(candidate => forcedOutputPortIndex !== undefined
                 ? candidate.index === forcedOutputPortIndex
-                : !isOutputPortConnected(from.id, candidate.index, kind, connections))
+                : true)
             .sort((a, b) => a.distance - b.distance);
+        const freeOutputCandidates = allOutputCandidates.filter(candidate =>
+            forcedOutputPortIndex !== undefined || !isOutputPortConnected(from.id, candidate.index, kind, connections)
+        );
+        const outputCandidates = freeOutputCandidates.length > 0 || forcedOutputPortIndex !== undefined
+            ? freeOutputCandidates
+            : allOutputCandidates.map(candidate => ({ ...candidate, distance: candidate.distance + 20000 }));
         const inputCandidates = inputs
             .map((port, index) => ({ port, index, distance: Math.abs(to.x + port.x - fromCenter.x) + Math.abs(to.y + port.y - fromCenter.y) }))
             .filter(candidate => !isInputPortConnected(to.id, candidate.index, kind, connections))
@@ -967,6 +1105,10 @@ const buildConnection = (
 
         for (const outputCandidate of outputCandidates.slice(0, 6)) {
             for (const inputCandidate of inputCandidates.slice(0, 6)) {
+                if (Date.now() > deadline) {
+                    attempts.push('route search timed out');
+                    return null;
+                }
                 const output = outputCandidate.port;
                 const input = inputCandidate.port;
                 const start = { x: from.x + output.x, y: from.y + output.y };
@@ -1034,9 +1176,11 @@ const buildConnection = (
 
     let bestOverall: ScoredConnectionCandidate | null = null;
     for (const fromRotation of fromRotations) {
+        if (Date.now() > deadline) break;
         from.rotation = fromRotation;
         if (!canPlace(fromConfig, from, machines.filter(machine => machine.id !== from.id), gridWidth, gridHeight)) continue;
         for (const toRotation of toRotations) {
+            if (Date.now() > deadline) break;
             to.rotation = toRotation;
             if (!canPlace(toConfig, to, machines.filter(machine => machine.id !== to.id), gridWidth, gridHeight)) continue;
             const candidate = tryCurrentRotation();
@@ -1052,6 +1196,55 @@ const buildConnection = (
 
     from.rotation = originalFromRotation;
     to.rotation = originalToRotation;
+    if (allowRelay && !LOGISTICS_FACILITY_IDS.has(to.machineId) && (kind === 'pipe' || kind === 'belt')) {
+        const relayMachineCount = machines.length;
+        const relayMachineStates = machines.map(cloneMachine);
+        const relayConnections = connections.map(cloneConnection);
+        const relayMachineId = kind === 'pipe' ? 'fluid-tank' : 'splitter';
+        const relayPreferredPoints = [
+            { x: Math.max(1, to.x - 6), y: to.y },
+            { x: from.x + 5, y: from.y },
+            { x: Math.floor((from.x + to.x) / 2), y: Math.floor((from.y + to.y) / 2) },
+            { x: Math.max(1, to.x - 6), y: to.y + 6 },
+            { x: from.x + 5, y: from.y + 6 },
+        ];
+        let relayError = '';
+        for (const preferred of relayPreferredPoints) {
+            restoreMachinePrefix(machines, relayMachineStates, relayMachineCount);
+            connections.splice(0, connections.length, ...relayConnections.map(cloneConnection));
+            const relay = placeNear(
+                relayMachineId,
+                preferred,
+                machines,
+                gridWidth,
+                gridHeight,
+                kind === 'pipe' ? { selectedMaterialId: itemId } : {},
+                candidate => {
+                    const candidateCenter = machineCenter(candidate);
+                    const targetCenter = machineCenter(to);
+                    const sourceCenter = machineCenter(from);
+                    return Math.abs(candidateCenter.x - targetCenter.x) +
+                        Math.abs(candidateCenter.y - targetCenter.y) +
+                        Math.abs(candidateCenter.x - sourceCenter.x) +
+                        Math.abs(candidateCenter.y - sourceCenter.y);
+                },
+                connections
+            );
+            if (!relay.machine) {
+                relayError = relay.error || relayError;
+                continue;
+            }
+            const toRelay = buildConnection(from, relay.machine, itemId, machines, connections, gridWidth, gridHeight, forcedOutputPortIndex, false);
+            const relayToTarget = toRelay.connection
+                ? buildConnection(relay.machine, to, itemId, machines, connections, gridWidth, gridHeight, kind === 'pipe' ? 0 : undefined, false)
+                : { connection: null, error: toRelay.error };
+            if (relayToTarget.connection) return relayToTarget;
+            relayError = relayToTarget.error || toRelay.error || relayError;
+        }
+        attempts.push(`relay ${relayMachineId} failed: ${relayError || 'unreachable'}`);
+        restoreMachinePrefix(machines, relayMachineStates, relayMachineCount);
+        connections.splice(0, connections.length, ...relayConnections.map(cloneConnection));
+    }
     const branchConnection = forcedOutputPortIndex === undefined ? branchFromExistingOutput() : null;
     if (branchConnection) return { connection: branchConnection, error: null };
     const detail = attempts.slice(-4).join('; ') || 'no viable port/rotation/path candidate';
@@ -1269,10 +1462,13 @@ const cleanupAutoLayout = (
         usedMachineIds.has(connection.fromOriginal.machineId) &&
         (!connection.toOriginal || usedMachineIds.has(connection.toOriginal.machineId))
     );
-    viableConnections.forEach(connection => connection.path.forEach(point => pathPoints.add(pointKey(point))));
+    viableConnections.forEach(connection => expandPath(connection.path).forEach(point => pathPoints.add(pointKey(point))));
     machines.forEach(machine => {
         if (machine.machineId === 'belt-bridge' || machine.machineId === 'pipe-bridge') {
             if (pathPoints.has(pointKey(machine))) usedMachineIds.add(machine.id);
+        }
+        if (getFacility(machine.machineId)?.category === 'power') {
+            usedMachineIds.add(machine.id);
         }
         if ((machine.machineId === 'depot-bus-port' || machine.machineId === 'depot-bus-section') &&
             machines.some(candidate =>
@@ -1292,10 +1488,89 @@ const cleanupAutoLayout = (
     return { machines: keptMachines, connections: keptConnections };
 };
 
+const findConfiguredRecipe = (machine: PlacedMachine) => {
+    const recipes = getRecipesForFacility(machine.machineId);
+    return recipes.find(recipe => recipe.id === machine.selectedRecipeId) ||
+        recipes.find(recipe => recipe.outputs.some(output => output.materialId === machine.selectedMaterialId));
+};
+
+const validateFacilityRecipeConnections = (
+    machines: PlacedMachine[],
+    connections: Connection[]
+) => {
+    const inputIdsByMachine = new Map<string, string[]>();
+    const incomingByMachine = new Map<string, Connection[]>();
+    const outgoingByMachine = new Map<string, Connection[]>();
+    connections.forEach(connection => {
+        const outgoing = outgoingByMachine.get(connection.fromOriginal.machineId) || [];
+        outgoing.push(connection);
+        outgoingByMachine.set(connection.fromOriginal.machineId, outgoing);
+        if (!connection.toOriginal) return;
+        const incoming = incomingByMachine.get(connection.toOriginal.machineId) || [];
+        incoming.push(connection);
+        incomingByMachine.set(connection.toOriginal.machineId, incoming);
+    });
+
+    connections.forEach(connection => {
+        if (!connection.toOriginal) return;
+        const item = getConnectionCarriedItem(connection, machines, inputIdsByMachine, connections);
+        if (!item) return;
+        const inputIds = inputIdsByMachine.get(connection.toOriginal.machineId) || [];
+        inputIds.push(item.id);
+        inputIdsByMachine.set(connection.toOriginal.machineId, inputIds);
+    });
+
+    for (const machine of machines) {
+        const facility = getFacility(machine.machineId);
+        if (!facility || facility.category === 'logistics' || facility.category === 'power') continue;
+
+        const incoming = incomingByMachine.get(machine.id) || [];
+        const outgoing = outgoingByMachine.get(machine.id) || [];
+        const recipe = findConfiguredRecipe(machine);
+
+        if (recipe) {
+            for (const input of recipe.inputs) {
+                if (!input.materialId) continue;
+                const kind = itemKind(input.materialId);
+                const hasMatchingInput = incoming.some(connection => {
+                    if ((connection.kind || 'belt') !== kind) return false;
+                    return getConnectionCarriedItem(connection, machines, inputIdsByMachine, connections)?.id === input.materialId;
+                });
+                if (!hasMatchingInput) {
+                    return `Auto layout failed validation: ${facility.name} is missing ${getItemLabel(input.materialId)} input.`;
+                }
+            }
+
+            const preferredOutput = getPreferredRecipeOutput(recipe);
+            const outputItemId = machine.selectedMaterialId || preferredOutput?.id;
+            if (outputItemId && !isSinkMachine(machine, incoming, outgoing)) {
+                const kind = itemKind(outputItemId);
+                const hasOutput = outgoing.some(connection => (connection.kind || 'belt') === kind);
+                if (!hasOutput) {
+                    return `Auto layout failed validation: ${facility.name} has no ${getItemLabel(outputItemId)} output route.`;
+                }
+            }
+        }
+
+        const inputKinds = new Set(facility.inputs.map(port => port.kind === 'pipe' ? 'pipe' : 'belt'));
+        for (const kind of inputKinds) {
+            if ((facility.category === 'production' || facility.category === 'processing') &&
+                !recipe &&
+                getConnectionInputs(facility, machine, kind).length > 0 &&
+                incoming.filter(connection => (connection.kind || 'belt') === kind).length === 0) {
+                return `Auto layout failed validation: ${facility.name} has no ${kind} input route.`;
+            }
+        }
+    }
+
+    return null;
+};
+
 const validateHardLayoutRules = (
     machines: PlacedMachine[],
     connections: Connection[],
-    existingConnectionIds: Set<string>
+    existingConnectionIds: Set<string>,
+    settings: AutoPlannerSettings
 ) => {
     for (const connection of connections) {
         if (existingConnectionIds.has(connection.id)) continue;
@@ -1320,9 +1595,9 @@ const validateHardLayoutRules = (
         if (!hasLogisticsEndpoint &&
             fromRect &&
             toRect &&
-            rectEdgeGap(fromRect, toRect) >= 5 &&
+            rectEdgeGap(fromRect, toRect) >= 20 &&
             !connectionFillsRelatedGap(connection, fromRect, toRect)) {
-            return `Auto layout failed validation: ${getFacility(from.machineId)?.name || from.machineId} and ${getFacility(to.machineId)?.name || to.machineId} are separated by 5 or more cells.`;
+            return `Auto layout failed validation: ${getFacility(from.machineId)?.name || from.machineId} and ${getFacility(to.machineId)?.name || to.machineId} are separated by 20 or more cells.`;
         }
     }
 
@@ -1331,23 +1606,404 @@ const validateHardLayoutRules = (
         const kind: ConnectionKind = machine.machineId === 'pipe-bridge' ? 'pipe' : 'belt';
         const point = { x: machine.x, y: machine.y };
         const directions = connections
-            .filter(connection => (connection.kind || 'belt') === kind && connection.path.some(pathPoint => isSamePoint(pathPoint, point)))
+            .filter(connection => (connection.kind || 'belt') === kind && interiorPathPoints(connection.path).some(pathPoint => isSamePoint(pathPoint, point)))
             .map(connection => pathDirectionAtPoint(connection.path, point));
         if (directions.length !== 2) return 'Auto layout failed validation: bridge must carry exactly two crossing routes.';
         if (directions.some(direction => !direction)) return 'Auto layout failed validation: bridge is used as a turn.';
         if (new Set(directions).size !== 2) return 'Auto layout failed validation: bridge does not contain perpendicular straight routes.';
     }
-    return null;
+
+    const protocolUsed = machines.filter(machine => machine.machineId !== 'belt' && machine.machineId !== 'pipe').length;
+    if (protocolUsed > settings.protocolLimit) {
+        return `Auto layout failed validation: protocol count ${protocolUsed} exceeds limit ${settings.protocolLimit}.`;
+    }
+
+    const counts = new Map<string, number>();
+    machines.forEach(machine => counts.set(machine.machineId, (counts.get(machine.machineId) || 0) + 1));
+    for (const [facilityId, limit] of Object.entries(settings.facilityLimits)) {
+        const used = counts.get(facilityId) || 0;
+        if (used > limit) {
+            return `Auto layout failed validation: ${getFacility(facilityId)?.name || facilityId} count ${used} exceeds limit ${limit}.`;
+        }
+    }
+
+    const unpowered = machines.find(machine => {
+        const facility = getFacility(machine.machineId);
+        return Boolean(facility && facility.power > 0 && !isMachinePowered(machine, machines, getFacility));
+    });
+    if (unpowered) {
+        return `Auto layout failed validation: ${getFacility(unpowered.machineId)?.name || unpowered.machineId} is not powered.`;
+    }
+    return validateFacilityRecipeConnections(machines, connections);
 };
 
-export const buildAutoLayout = (
+const countProtocolMachines = (machines: PlacedMachine[]) =>
+    machines.filter(machine => machine.machineId !== 'belt' && machine.machineId !== 'pipe').length;
+
+const ensurePowerCoverage = (
+    machines: PlacedMachine[],
+    connections: Connection[],
+    width: number,
+    height: number,
+    settings: AutoPlannerSettings
+) => {
+    const pylon = getFacility('electric-pylon');
+    if (!pylon) return null;
+
+    for (let guard = 0; guard < 80; guard += 1) {
+        const target = machines.find(machine => {
+            const facility = getFacility(machine.machineId);
+            return Boolean(facility && facility.power > 0 && !isMachinePowered(machine, machines, getFacility));
+        });
+        if (!target) return null;
+        if (countProtocolMachines(machines) >= settings.protocolLimit) {
+            return 'Auto layout failed: protocol count limit reached before all facilities could be powered.';
+        }
+
+        const rect = machineRect(target);
+        const preferred = rect
+            ? { x: Math.max(1, rect.x + Math.floor(rect.width / 2) - 1), y: Math.max(1, rect.y + rect.height + 2) }
+            : { x: target.x + 2, y: target.y + 4 };
+        // TODO: replace this with exact in-game pylon range and preferred socket positions when complete data is available.
+        const placed = placeNear('electric-pylon', preferred, machines, width, height, {}, candidate => {
+            const center = machineCenter(candidate);
+            const targetCenter = machineCenter(target);
+            const linePenalty = connections.some(connection => expandPath(connection.path).some(point => isPointInsideMachine(point, candidate))) ? 100000 : 0;
+            return Math.abs(center.x - targetCenter.x) + Math.abs(center.y - targetCenter.y) + linePenalty;
+        }, connections);
+        if (!placed.machine) return placed.error || 'Auto layout failed: cannot place power pylon.';
+    }
+
+    return 'Auto layout failed: power planning did not converge.';
+};
+
+const selectionBounds = (machines: PlacedMachine[], connections: Connection[]) => {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    machines.forEach(machine => {
+        const rect = machineRect(machine);
+        if (!rect) return;
+        minX = Math.min(minX, rect.x);
+        minY = Math.min(minY, rect.y);
+        maxX = Math.max(maxX, rect.x + rect.width);
+        maxY = Math.max(maxY, rect.y + rect.height);
+    });
+    connections.forEach(connection => {
+        expandPath(connection.path).forEach(point => {
+            minX = Math.min(minX, point.x);
+            minY = Math.min(minY, point.y);
+            maxX = Math.max(maxX, point.x + 1);
+            maxY = Math.max(maxY, point.y + 1);
+        });
+    });
+
+    if (minX === Infinity) return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0, area: 0 };
+    const width = Math.max(0, maxX - minX);
+    const height = Math.max(0, maxY - minY);
+    return { minX, minY, maxX, maxY, width, height, area: width * height };
+};
+
+const connectionLength = (connections: Connection[]) =>
+    connections.reduce((sum, connection) => sum + Math.max(0, expandPath(connection.path).length - 1), 0);
+
+const bridgeCount = (machines: PlacedMachine[]) =>
+    machines.filter(machine => machine.machineId === 'belt-bridge' || machine.machineId === 'pipe-bridge').length;
+
+const cloneMachines = (machines: PlacedMachine[]) => machines.map(cloneMachine);
+
+const cloneConnections = (connections: Connection[]) => connections.map(cloneConnection);
+
+const getMachineDepths = (machines: PlacedMachine[], connections: Connection[]) => {
+    const selectedIds = new Set(machines.map(machine => machine.id));
+    const incoming = new Map<string, string[]>();
+    connections.forEach(connection => {
+        if (!connection.toOriginal) return;
+        if (!selectedIds.has(connection.fromOriginal.machineId) || !selectedIds.has(connection.toOriginal.machineId)) return;
+        const list = incoming.get(connection.toOriginal.machineId) || [];
+        list.push(connection.fromOriginal.machineId);
+        incoming.set(connection.toOriginal.machineId, list);
+    });
+
+    const memo = new Map<string, number>();
+    const visiting = new Set<string>();
+    const depthOf = (machineId: string): number => {
+        if (memo.has(machineId)) return memo.get(machineId)!;
+        if (visiting.has(machineId)) return 0;
+        visiting.add(machineId);
+        const depth = Math.max(0, ...(incoming.get(machineId) || []).map(upstreamId => depthOf(upstreamId) + 1));
+        visiting.delete(machineId);
+        memo.set(machineId, depth);
+        return depth;
+    };
+
+    machines.forEach(machine => depthOf(machine.id));
+    return memo;
+};
+
+const placeOptimizedMachine = (
+    original: PlacedMachine,
+    preferred: Point,
+    workingMachines: PlacedMachine[],
+    stationaryConnections: Connection[],
+    gridWidth: number,
+    gridHeight: number,
+    movementWeight: number
+) => {
+    const facility = getFacility(original.machineId);
+    if (!facility) return null;
+
+    let best: PlacedMachine | null = null;
+    let bestScore = Infinity;
+    for (let radius = 0; radius <= 18; radius += 1) {
+        for (let dy = -radius; dy <= radius; dy += 1) {
+            for (let dx = -radius; dx <= radius; dx += 1) {
+                if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+                for (const rotation of ROTATIONS) {
+                    const candidate = { ...cloneMachine(original), x: preferred.x + dx, y: preferred.y + dy, rotation };
+                    if (!canPlace(facility, candidate, workingMachines, gridWidth, gridHeight, stationaryConnections)) continue;
+                    const score = (Math.abs(dx) + Math.abs(dy)) * 50 +
+                        Math.abs(candidate.x - original.x) * movementWeight +
+                        Math.abs(candidate.y - original.y) * movementWeight +
+                        (rotation === original.rotation ? 0 : 120);
+                    if (score < bestScore) {
+                        best = candidate;
+                        bestScore = score;
+                    }
+                }
+            }
+        }
+        if (best && radius >= 3) break;
+    }
+    return best;
+};
+
+interface RouteSpec {
+    fromId: string;
+    toId: string;
+    itemId: string;
+    originalConnectionId: string;
+}
+
+const buildOptimizedSelectionCandidate = (
+    movableMachines: PlacedMachine[],
+    routeSpecs: RouteSpec[],
+    stationaryMachines: PlacedMachine[],
+    stationaryConnections: Connection[],
+    gridWidth: number,
+    gridHeight: number,
+    settings: AutoPlannerSettings,
+    bounds: ReturnType<typeof selectionBounds>,
+    variant: { rowGap: number; columnGap: number; movementWeight: number; transpose: boolean }
+) => {
+    const depths = getMachineDepths(movableMachines, routeSpecs.map(spec => ({
+        id: spec.originalConnectionId,
+        fromOriginal: { machineId: spec.fromId, portIndex: 0 },
+        toOriginal: { machineId: spec.toId, portIndex: 0 },
+        path: [],
+    })));
+    const rowsByDepth = new Map<number, number>();
+    const workingMachines = cloneMachines(stationaryMachines);
+    const workingConnections = cloneConnections(stationaryConnections);
+    const ordered = [...movableMachines].sort((a, b) =>
+        (depths.get(a.id) || 0) - (depths.get(b.id) || 0) || a.y - b.y || a.x - b.x
+    );
+
+    for (const machine of ordered) {
+        const depth = depths.get(machine.id) || 0;
+        const row = rowsByDepth.get(depth) || 0;
+        rowsByDepth.set(depth, row + 1);
+        const preferred = variant.transpose
+            ? { x: bounds.minX + row * variant.rowGap, y: bounds.minY + depth * variant.columnGap }
+            : { x: bounds.minX + depth * variant.columnGap, y: bounds.minY + row * variant.rowGap };
+        const placed = placeOptimizedMachine(
+            machine,
+            preferred,
+            workingMachines,
+            stationaryConnections,
+            gridWidth,
+            gridHeight,
+            variant.movementWeight
+        );
+        if (!placed) return { ok: false as const, error: `优化失败：无法重新摆放 ${getFacility(machine.machineId)?.name || machine.machineId}。` };
+        workingMachines.push(placed);
+    }
+
+    const routedConnectionIds: string[] = [];
+    const routeOrder = [...routeSpecs].sort((a, b) => {
+        const aInternal = Number(ordered.some(machine => machine.id === a.fromId) && ordered.some(machine => machine.id === a.toId));
+        const bInternal = Number(ordered.some(machine => machine.id === b.fromId) && ordered.some(machine => machine.id === b.toId));
+        return bInternal - aInternal;
+    });
+
+    for (const spec of routeOrder) {
+        const from = workingMachines.find(machine => machine.id === spec.fromId);
+        const to = workingMachines.find(machine => machine.id === spec.toId);
+        if (!from || !to) return { ok: false as const, error: `优化失败：连接端点不存在（${spec.itemId}）。` };
+        const built = buildConnection(from, to, spec.itemId, workingMachines, workingConnections, gridWidth, gridHeight);
+        if (!built.connection) return { ok: false as const, error: built.error || `优化失败：无法重新连接 ${getItemLabel(spec.itemId)}。` };
+        routedConnectionIds.push(built.connection.id);
+    }
+
+    const validationError = validateHardLayoutRules(workingMachines, workingConnections, new Set(stationaryConnections.map(connection => connection.id)), settings);
+    if (validationError) return { ok: false as const, error: validationError };
+
+    const selectedMachineIdSet = new Set(movableMachines.map(machine => machine.id));
+    const newMachines = workingMachines.filter(machine => !stationaryMachines.some(stationary => stationary.id === machine.id));
+    const newConnections = workingConnections.filter(connection => !stationaryConnections.some(stationary => stationary.id === connection.id));
+    const selectedConnections = newConnections.filter(connection => routedConnectionIds.includes(connection.id));
+    const selectedBounds = selectionBounds(newMachines, selectedConnections);
+    const score = selectedBounds.area * 100000 +
+        connectionLength(selectedConnections) * 100 +
+        selectedConnections.reduce((sum, connection) => sum + pathTurns(connection.path), 0) * 250 +
+        bridgeCount(newMachines) * 1000 +
+        newMachines.reduce((sum, machine) => {
+            const original = movableMachines.find(candidate => candidate.id === machine.id);
+            return original && selectedMachineIdSet.has(machine.id)
+                ? sum + Math.abs(machine.x - original.x) + Math.abs(machine.y - original.y)
+                : sum;
+        }, 0);
+
+    return {
+        ok: true as const,
+        machines: workingMachines,
+        connections: workingConnections,
+        selectedMachineIds: newMachines.map(machine => machine.id),
+        selectedConnectionIds: newConnections.map(connection => connection.id),
+        selectedBounds,
+        score,
+    };
+};
+
+export const optimizeSelectedBlueprint = (
+    machines: PlacedMachine[],
+    connections: Connection[],
+    selectedMachineIds: string[],
+    selectedConnectionIds: string[],
+    gridWidth: number,
+    gridHeight: number,
+    settings: AutoPlannerSettings
+): { ok: true; result: BlueprintOptimizationResult } | { ok: false; error: string } => {
+    const selectedMachineIdSet = new Set(selectedMachineIds);
+    const selectedConnectionIdSet = new Set(selectedConnectionIds);
+    if (selectedMachineIdSet.size === 0 && selectedConnectionIdSet.size === 0) {
+        return { ok: false, error: '请先选择要优化的蓝图对象。' };
+    }
+
+    const movableMachines = machines
+        .filter(machine => selectedMachineIdSet.has(machine.id))
+        .filter(machine => getFacility(machine.machineId)?.category !== 'logistics');
+    if (movableMachines.length === 0) {
+        return { ok: false, error: '优化失败：请至少选择一个生产、仓储或特殊设施；仅选择线路时无法判断生产关系。' };
+    }
+
+    const movableIds = new Set(movableMachines.map(machine => machine.id));
+    const affectedConnections = connections.filter(connection =>
+        selectedConnectionIdSet.has(connection.id) ||
+        movableIds.has(connection.fromOriginal.machineId) ||
+        (connection.toOriginal && movableIds.has(connection.toOriginal.machineId))
+    );
+    if (affectedConnections.some(connection => !connection.toOriginal)) {
+        return { ok: false, error: '优化失败：选区包含悬空线路，请先连接完整后再优化。' };
+    }
+
+    const routeSpecs: RouteSpec[] = [];
+    for (const connection of affectedConnections) {
+        if (!connection.toOriginal) continue;
+        const item = getConnectionCarriedItem(connection, machines, new Map(), connections);
+        if (!item) {
+            return { ok: false, error: '优化失败：无法识别选中线路承载的物品，请检查源设施的物品/配方设置。' };
+        }
+        routeSpecs.push({
+            fromId: connection.fromOriginal.machineId,
+            toId: connection.toOriginal.machineId,
+            itemId: item.id,
+            originalConnectionId: connection.id,
+        });
+    }
+    if (routeSpecs.length === 0) {
+        return { ok: false, error: '优化失败：选区没有可重连的生产关系。' };
+    }
+
+    const affectedConnectionIds = new Set(affectedConnections.map(connection => connection.id));
+    const selectedLogisticsIds = new Set(
+        machines
+            .filter(machine => selectedMachineIdSet.has(machine.id) && getFacility(machine.machineId)?.category === 'logistics')
+            .map(machine => machine.id)
+    );
+    const stationaryMachines = machines.filter(machine => !movableIds.has(machine.id) && !selectedLogisticsIds.has(machine.id));
+    const stationaryConnections = connections.filter(connection => !affectedConnectionIds.has(connection.id));
+    const oldSelectedMachines = machines.filter(machine => selectedMachineIdSet.has(machine.id));
+    const oldSelectedConnections = connections.filter(connection => affectedConnectionIds.has(connection.id));
+    const oldBounds = selectionBounds(oldSelectedMachines, oldSelectedConnections);
+    const oldLineLength = connectionLength(oldSelectedConnections);
+    const oldBridgeCount = bridgeCount(oldSelectedMachines);
+
+    const variants = [
+        { rowGap: 5, columnGap: 8, movementWeight: 1, transpose: false },
+        { rowGap: 4, columnGap: 7, movementWeight: 2, transpose: false },
+        { rowGap: 6, columnGap: 7, movementWeight: 0.5, transpose: false },
+        { rowGap: 8, columnGap: 5, movementWeight: 1, transpose: true },
+    ];
+
+    let best: ReturnType<typeof buildOptimizedSelectionCandidate> | null = null;
+    let lastError = '优化失败：没有找到验证通过的紧凑布局。';
+    for (const variant of variants) {
+        const candidate = buildOptimizedSelectionCandidate(
+            movableMachines,
+            routeSpecs,
+            stationaryMachines,
+            stationaryConnections,
+            gridWidth,
+            gridHeight,
+            settings,
+            oldBounds,
+            variant
+        );
+        if (!candidate.ok) {
+            lastError = candidate.error;
+            continue;
+        }
+        if (!best || candidate.score < best.score) best = candidate;
+    }
+
+    if (!best || !best.ok) return { ok: false, error: lastError };
+
+    return {
+        ok: true,
+        result: {
+            machines: best.machines,
+            connections: best.connections,
+            selectedMachineIds: best.selectedMachineIds,
+            selectedConnectionIds: best.selectedConnectionIds,
+            stats: {
+                oldWidth: oldBounds.width,
+                oldHeight: oldBounds.height,
+                oldArea: oldBounds.area,
+                newWidth: best.selectedBounds.width,
+                newHeight: best.selectedBounds.height,
+                newArea: best.selectedBounds.area,
+                oldLineLength,
+                newLineLength: connectionLength(best.connections.filter(connection => best.selectedConnectionIds.includes(connection.id))),
+                oldBridgeCount,
+                newBridgeCount: bridgeCount(best.machines.filter(machine => best.selectedMachineIds.includes(machine.id))),
+            },
+        },
+    };
+};
+
+export const buildAutoLayout = async (
     graph: ProductionGraph,
     settings: AutoPlannerSettings,
     existingMachines: PlacedMachine[],
     existingConnections: Connection[],
     gridWidth: number,
-    gridHeight: number
-): { ok: true; result: AutoLayoutResult } | { ok: false; error: string } => {
+    gridHeight: number,
+    onProgress?: AutoLayoutProgress
+): Promise<{ ok: true; result: AutoLayoutResult } | { ok: false; error: string }> => {
+    await reportProgress(onProgress, '摆放设施', 45);
     const width = Math.max(200, gridWidth);
     const height = Math.max(200, gridHeight);
     const machines = existingMachines.map(machine => ({ ...machine }));
@@ -1399,6 +2055,8 @@ export const buildAutoLayout = (
         depotBusPortsUsed = overflowSources.length;
         limitedFacilities['depot-bus-port'] = overflowSources.length;
     }
+
+    await reportProgress(onProgress, '摆放设施', 55);
 
     liquidSources.forEach((itemId, index) => {
         const placed = placeNear('fluid-tank', { x: 15, y: START_Y + index * 5 }, machines, width, height, { selectedMaterialId: itemId }, () => 0, connections);
@@ -1493,6 +2151,8 @@ export const buildAutoLayout = (
         addProvider(cycle.seedItemId, { machineId: seedPicker.machine.id });
     }
 
+    await reportProgress(onProgress, '摆放设施', 62);
+
     const sortedNodes = [...graph.nodes].sort(nodeSort);
     const nodeMachines = new Map<string, PlacedMachine[]>();
     const rowsByDepth = new Map<number, number>();
@@ -1516,21 +2176,12 @@ export const buildAutoLayout = (
             const upstreamAverageY = upstreamCenters.length
                 ? Math.round(upstreamCenters.reduce((sum, center) => sum + center.y, 0) / upstreamCenters.length)
                 : START_Y + (row + index) * ROW_GAP;
-            const upstreamAverageX = upstreamCenters.length
-                ? Math.round(upstreamCenters.reduce((sum, center) => sum + center.x, 0) / upstreamCenters.length)
-                : START_X + (maxDepth - node.depth) * columnGap;
             const upstreamMaxX = upstreamMachines.length
                 ? Math.max(...upstreamMachines.map(machine => {
                     const rect = machineRect(machine);
                     return rect ? rect.x + rect.width : machine.x;
                 }))
                 : START_X + (maxDepth - node.depth) * columnGap;
-            const upstreamMaxY = upstreamMachines.length
-                ? Math.max(...upstreamMachines.map(machine => {
-                    const rect = machineRect(machine);
-                    return rect ? rect.y + rect.height : machine.y;
-                }))
-                : START_Y + (row + index) * ROW_GAP;
             const hasMultipleUpstreams = upstreamMachines.length > 1;
             const x = upstreamMachines.length
                 ? hasMultipleUpstreams
@@ -1566,11 +2217,15 @@ export const buildAutoLayout = (
             addProvider(node.itemId, { machineId: placed.machine.id });
         }
         nodeMachines.set(node.id, placedForNode);
+        await reportProgress(onProgress, '摆放设施', Math.min(72, 62 + Math.round((nodeMachines.size / Math.max(1, sortedNodes.length)) * 10)));
     }
+
+    await reportProgress(onProgress, '连接物流线路', 74);
 
     for (const node of sortedNodes) {
         const consumers = nodeMachines.get(node.id) || [];
         for (const consumer of consumers) {
+            await reportProgress(onProgress, `连接 ${getItemLabel(node.itemId)}`, 74);
             const orderedInputs = [...node.inputRates].sort((a, b) => {
                 const machineA = chooseProviderForConsumer(a.itemId, consumer, providers, machines, connections)?.machine;
                 const machineB = chooseProviderForConsumer(b.itemId, consumer, providers, machines, connections)?.machine;
@@ -1603,8 +2258,9 @@ export const buildAutoLayout = (
             let lastConnectionError = 'Auto layout failed: logistics connection failed.';
             let bestInputPlan: { machines: PlacedMachine[]; connections: Connection[]; score: number } | null = null;
             const consumerBase = cloneMachine(consumer);
+            const consumerDeadline = Date.now() + 12000;
             const moveCandidates: Point[] = [{ x: 0, y: 0 }];
-            for (let radius = 1; radius <= 2; radius += 1) {
+            for (let radius = 1; radius <= 4; radius += 1) {
                 for (let dy = -radius; dy <= radius; dy += 1) {
                     for (let dx = -radius; dx <= radius; dx += 1) {
                         if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
@@ -1614,7 +2270,9 @@ export const buildAutoLayout = (
             }
 
             for (const move of moveCandidates) {
+                if (Date.now() > consumerDeadline) break;
                 for (const inputOrder of uniqueInputOrders) {
+                    if (Date.now() > consumerDeadline) break;
                     restoreMachinePrefix(machines, baseMachineStates, baseMachineCount);
                     connections.splice(0, connections.length, ...baseConnections.map(cloneConnection));
                     const movedConsumer = machines.find(machine => machine.id === consumer.id);
@@ -1638,7 +2296,32 @@ export const buildAutoLayout = (
                         if (!currentConsumer) {
                             return { ok: false, error: `Auto layout failed: no upstream provider for ${getItemLabel(input.itemId)}.` };
                         }
-                        const providerOptions = rankProvidersForConsumer(input.itemId, currentConsumer, providers, machines, connections);
+                        let providerOptions = rankProvidersForConsumer(input.itemId, currentConsumer, providers, machines, connections);
+                        if (itemKind(input.itemId) === 'pipe' && graph.sourceDemands.has(input.itemId)) {
+                            const localTank = placeNear(
+                                'fluid-tank',
+                                { x: Math.max(1, currentConsumer.x - 7), y: currentConsumer.y },
+                                machines,
+                                width,
+                                height,
+                                { selectedMaterialId: input.itemId },
+                                candidate => {
+                                    const candidateCenter = machineCenter(candidate);
+                                    const consumerCenter = machineCenter(currentConsumer);
+                                    return Math.abs(candidateCenter.x - consumerCenter.x) + Math.abs(candidateCenter.y - consumerCenter.y);
+                                },
+                                connections
+                            );
+                            if (localTank.machine) {
+                                providerOptions = [{
+                                    provider: { machineId: localTank.machine.id, outputPortIndex: 0 },
+                                    machine: localTank.machine,
+                                    score: 0,
+                                }];
+                            } else {
+                                lastConnectionError = localTank.error || `Auto layout failed: cannot place local fluid tank for ${getItemLabel(input.itemId)}.`;
+                            }
+                        }
                         if (providerOptions.length === 0) {
                             return { ok: false, error: `Auto layout failed: no upstream provider for ${getItemLabel(input.itemId)}.` };
                         }
@@ -1648,6 +2331,10 @@ export const buildAutoLayout = (
                         const inputConnections = connections.map(cloneConnection);
                         let inputConnected = false;
                         for (const option of providerOptions) {
+                            if (Date.now() > consumerDeadline) {
+                                lastConnectionError = `Auto layout failed: routing ${getItemLabel(input.itemId)} to ${getFacility(currentConsumer.machineId)?.name || currentConsumer.machineId} timed out.`;
+                                break;
+                            }
                             restoreMachinePrefix(machines, inputMachineStates, inputMachineCount);
                             connections.splice(0, connections.length, ...inputConnections.map(cloneConnection));
                             const providerMachine = machines.find(machine => machine.id === option.provider.machineId);
@@ -1683,13 +2370,17 @@ export const buildAutoLayout = (
 
             restoreMachinePrefix(machines, baseMachineStates, baseMachineCount);
             connections.splice(0, connections.length, ...baseConnections.map(cloneConnection));
-            if (!bestInputPlan) return { ok: false, error: lastConnectionError };
+            if (!bestInputPlan) {
+                const facilityName = getFacility(consumer.machineId)?.name || consumer.machineId;
+                return { ok: false, error: `${lastConnectionError} (${getItemLabel(node.itemId)} -> ${facilityName}).` };
+            }
             for (let index = 0; index < baseMachineCount; index += 1) {
                 Object.assign(machines[index], cloneMachine(bestInputPlan.machines[index]));
             }
             machines.push(...bestInputPlan.machines.slice(baseMachineCount).map(cloneMachine));
             connections.splice(0, connections.length, ...bestInputPlan.connections.map(cloneConnection));
         }
+        await reportProgress(onProgress, '连接物流线路', Math.min(88, 74 + Math.round(((sortedNodes.indexOf(node) + 1) / Math.max(1, sortedNodes.length)) * 14)));
     }
 
     graph.targets.forEach((target, index) => {
@@ -1726,6 +2417,10 @@ export const buildAutoLayout = (
         storedTargetItemIds.add(target.itemId);
     });
 
+    await reportProgress(onProgress, '校验蓝图', 90);
+    const powerError = ensurePowerCoverage(machines, connections, width, height, settings);
+    if (powerError) return { ok: false, error: powerError };
+
     limitedFacilities['depot-bus-port'] = depotBusPortsUsed;
     graph.facilityUsage.forEach((count, facilityId) => {
         if (facilityId === 'forge-of-the-sky') {
@@ -1744,13 +2439,15 @@ export const buildAutoLayout = (
         if (cycle) cycleRecipes.push(cycle.seedRecipe.name, cycle.plantingRecipe.name);
     });
     const cleaned = cleanupAutoLayout(machines, connections, existingMachineIds);
-    const validationError = validateHardLayoutRules(cleaned.machines, cleaned.connections, existingConnectionIds);
+    const validationError = validateHardLayoutRules(cleaned.machines, cleaned.connections, existingConnectionIds, settings);
     if (validationError) return { ok: false, error: validationError };
     const stats = getOccupiedLayoutStats(cleaned.machines, cleaned.connections);
     const generatedConnections = cleaned.connections.filter(connection => !existingConnectionIds.has(connection.id));
-    const totalLineLength = generatedConnections.reduce((sum, connection) => sum + Math.max(0, connection.path.length - 1), 0);
+    const totalLineLength = generatedConnections.reduce((sum, connection) => sum + Math.max(0, expandPath(connection.path).length - 1), 0);
     const totalTurns = generatedConnections.reduce((sum, connection) => sum + pathTurns(connection.path), 0);
+    const protocolUsed = countProtocolMachines(cleaned.machines);
     warnings.push(`Auto layout score: coverage ${(stats.coverage * 100).toFixed(1)}%, line length ${totalLineLength}, turns ${totalTurns}, bbox ${stats.area} cells.`);
+    warnings.push(`Protocol count used: ${protocolUsed}/${settings.protocolLimit}.`);
 
     const report: AutoPlannerReport = {
         targets: graph.targets.map(target => `${getItemLabel(target.itemId)} ${target.ratePerMinute}/min`),

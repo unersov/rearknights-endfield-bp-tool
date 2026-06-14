@@ -52,6 +52,17 @@
         transform: translate(-50%, -50%) rotate(var(--facility-rotation));
     }
 
+    .facility-image-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--gray-dark);
+        font-size: 14px;
+        font-weight: bold;
+        background: rgba(255, 255, 255, 0.55);
+        border-radius: 4px;
+    }
+
     .machine-label {
         position: absolute;
         top: 100%;

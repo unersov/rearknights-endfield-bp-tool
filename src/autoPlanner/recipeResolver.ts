@@ -220,7 +220,7 @@ export const resolveProductionGraph = (
             }));
 
         const existingNode = nodeByItem.get(itemId);
-        if (existingNode && existingNode.recipe.id === recipe.id && recipe.machineId !== 'shredding-unit') {
+        if (existingNode && existingNode.recipe.id === recipe.id) {
             const previousCount = existingNode.facilityCount;
             existingNode.demandRate += demandRate;
             existingNode.facilityCount = Math.max(1, Math.ceil(existingNode.demandRate / outputRate));

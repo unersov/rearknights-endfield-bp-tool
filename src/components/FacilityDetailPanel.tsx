@@ -1,5 +1,6 @@
-import { Badge, Box, Button, CloseButton, Dialog, Flex, Grid, Text, VStack } from '@chakra-ui/react';
+import { Badge, Box, Button, CloseButton, Dialog, Flex, Grid, SimpleGrid, Text, VStack } from '@chakra-ui/react';
 import { useState } from 'react';
+import { ITEMS } from '../config/items';
 import { getFacilityConfig } from '../config/facilities';
 import { useGameStore } from '../store/gameStore';
 import type { Connection, Item, PlacedMachine, Recipe } from '../types';
@@ -8,6 +9,7 @@ import { getRotatedPorts } from '../utils/machineUtils';
 import { getRecipeItemsByKind, getRecipePortSlotsForFacility } from '../utils/recipePorts';
 import { getConnectionInputs } from '../utils/facilityLogistics';
 import { getConnectionCarriedItem } from '../utils/connectionContent';
+import { analyzeReactorCrucible, getReactorRecipeLimit, getReactorSlotCount, REACTOR_CRUCIBLE_IDS } from '../utils/reactorCrucible';
 import { ItemIcon } from './ItemIcon';
 import { RecipeViewer } from './RecipeViewer';
 
@@ -42,6 +44,7 @@ export const FacilityDetailPanel = () => {
         connections,
         openMaterialSelector,
         setMachineRecipe,
+        setReactorSlotItem,
         removeMachine,
     } = useGameStore();
     const [isRecipeOpen, setIsRecipeOpen] = useState(false);
@@ -75,6 +78,132 @@ export const FacilityDetailPanel = () => {
         removeMachine(machine.id);
         closeFacilityDetail();
     };
+
+    if (REACTOR_CRUCIBLE_IDS.has(config.id)) {
+        const slotCount = getReactorSlotCount(config.id);
+        const recipeLimit = getReactorRecipeLimit(config.id);
+        const slots = machine.reactorSlotItemIds || [];
+        const analysis = analyzeReactorCrucible(config.id, slots);
+        const allItems = Object.values(ITEMS).sort((a, b) => a.name.localeCompare(b.name));
+        const rotatedOutputs = getRotatedPorts(config.outputs, config.width, config.height, machine.rotation);
+        const liquidOutputIndices = rotatedOutputs
+            .map((port, index) => ({ port, index }))
+            .filter(candidate => candidate.port.kind === 'pipe')
+            .slice(0, 2)
+            .map(candidate => candidate.index);
+        const solidOutputIndex = rotatedOutputs.findIndex(port => port.kind !== 'pipe');
+
+        return (
+            <>
+                <Dialog.Root open={Boolean(machine)} onOpenChange={(event) => !event.open && closeFacilityDetail()} size="xl">
+                    <Dialog.Backdrop />
+                    <Dialog.Positioner>
+                        <Dialog.Content backgroundColor="var(--gray-light)" color="var(--gray-dark)" maxW="1120px">
+                            <Dialog.CloseTrigger asChild>
+                                <CloseButton size="sm" />
+                            </Dialog.CloseTrigger>
+                            <Dialog.Header borderBottom="1px solid rgba(0,0,0,0.12)">
+                                <Flex align="center" justify="space-between" w="100%" gap="16px">
+                                    <Box borderLeft="4px solid var(--gray-dark)" pl="8px">
+                                        <Flex align="center" gap="10px" wrap="wrap">
+                                            <Text fontSize="2xl" fontWeight="bold">{config.name}</Text>
+                                            <Badge borderRadius="full" px="10px">{powerText}</Badge>
+                                        </Flex>
+                                    </Box>
+                                    <Text fontWeight="bold" opacity={0.75}>最多同时进行 {recipeLimit} 个配方</Text>
+                                </Flex>
+                            </Dialog.Header>
+                            <Dialog.Body py="20px">
+                                <Grid templateColumns="1fr 320px" gap="20px" alignItems="start">
+                                    <Box>
+                                        <Text fontSize="sm" opacity={0.75} mb="10px">反应槽位</Text>
+                                        <SimpleGrid columns={{ base: 2, md: 3 }} gap="12px">
+                                            {Array.from({ length: slotCount }).map((_, index) => {
+                                                const item = getItemByIdIncludingDynamic(slots[index]);
+                                                return (
+                                                    <Box key={index} bg="white" borderRadius="8px" p="12px" border="1px solid rgba(0,0,0,0.12)">
+                                                        <Flex align="center" gap="10px" mb="8px">
+                                                            <ItemIcon item={item} label="未选择" size={38} />
+                                                            <Box minW="0">
+                                                                <Text fontSize="sm" fontWeight="bold">槽位 {index + 1}</Text>
+                                                                <Text fontSize="xs" opacity={0.65}>{item?.name || '未选择'}</Text>
+                                                            </Box>
+                                                        </Flex>
+                                                        <select
+                                                            value={slots[index] || ''}
+                                                            onChange={(event) => setReactorSlotItem(machine.id, index, event.target.value)}
+                                                            style={{ width: '100%', padding: '6px', border: '1px solid rgba(0,0,0,0.18)', borderRadius: 6 }}
+                                                        >
+                                                            <option value="">未选择</option>
+                                                            {allItems.map(candidate => (
+                                                                <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </Box>
+                                                );
+                                            })}
+                                        </SimpleGrid>
+
+                                        <Box mt="18px" bg="white" borderRadius="8px" p="14px" border="1px solid rgba(0,0,0,0.12)">
+                                            <Flex align="center" gap="8px" mb="10px">
+                                                <Text fontWeight="bold">可进行配方</Text>
+                                                <Badge>{analysis.runnableRecipes.length}/{recipeLimit}</Badge>
+                                            </Flex>
+                                            {analysis.runnableRecipes.length === 0 ? (
+                                                <Text fontSize="sm" opacity={0.65}>当前槽位组合暂时无法触发配方。</Text>
+                                            ) : (
+                                                <VStack align="stretch" gap="8px">
+                                                    {analysis.runnableRecipes.map(recipe => (
+                                                        <Box key={recipe.id} bg="rgba(0,0,0,0.04)" borderRadius="6px" p="10px">
+                                                            <Text fontWeight="bold" fontSize="sm">{recipe.name}</Text>
+                                                            <Text fontSize="xs" opacity={0.72}>
+                                                                {recipe.inputs.map(input => getItemByIdIncludingDynamic(input.materialId)?.name || input.name || input.materialId).join(' + ')}
+                                                                {' -> '}
+                                                                {recipe.outputs.map(output => getItemByIdIncludingDynamic(output.materialId)?.name || output.name || output.materialId).join(' + ')}
+                                                            </Text>
+                                                        </Box>
+                                                    ))}
+                                                </VStack>
+                                            )}
+                                        </Box>
+                                    </Box>
+
+                                    <VStack align="stretch" gap="12px">
+                                        <Text fontSize="sm" opacity={0.75}>输出选择</Text>
+                                        {liquidOutputIndices.map((outputIndex, localIndex) => (
+                                            <ReactorOutputCard
+                                                key={outputIndex}
+                                                title={`液体输出 ${localIndex + 1}`}
+                                                item={getItemByIdIncludingDynamic(machine.selectedOutputItemIds?.[outputIndex])}
+                                                options={analysis.liquidOutputs}
+                                                onSelect={() => openMaterialSelector(machine.id, outputIndex)}
+                                            />
+                                        ))}
+                                        {solidOutputIndex >= 0 && (
+                                            <ReactorOutputCard
+                                                title="固体输出 1"
+                                                item={getItemByIdIncludingDynamic(machine.selectedOutputItemIds?.[solidOutputIndex])}
+                                                options={analysis.solidOutputs}
+                                                onSelect={() => openMaterialSelector(machine.id, solidOutputIndex)}
+                                            />
+                                        )}
+                                        <Box bg="white" borderRadius="8px" p="12px" border="1px solid rgba(0,0,0,0.12)">
+                                            <Text fontSize="sm" fontWeight="bold" mb="6px">可输出物</Text>
+                                            <Text fontSize="xs" opacity={0.72}>液体：{analysis.liquidOutputs.map(item => item.name).join('、') || '无'}</Text>
+                                            <Text fontSize="xs" opacity={0.72}>固体：{analysis.solidOutputs.map(item => item.name).join('、') || '无'}</Text>
+                                        </Box>
+                                    </VStack>
+                                </Grid>
+                            </Dialog.Body>
+                            <Dialog.Footer justifyContent="center" gap="14px" pb="20px">
+                                <Button variant="outline" className="gray-btn" onClick={handleStore}>收纳设备</Button>
+                            </Dialog.Footer>
+                        </Dialog.Content>
+                    </Dialog.Positioner>
+                </Dialog.Root>
+            </>
+        );
+    }
 
     const getInputItemForPort = (portIndex: number) => {
         const port = inputPorts[portIndex];
@@ -249,6 +378,30 @@ const PortCard = ({
                     </Button>
                 )}
             </Box>
+        </Flex>
+    </Box>
+);
+
+const ReactorOutputCard = ({
+    title,
+    item,
+    options,
+    onSelect,
+}: {
+    title: string;
+    item?: Item;
+    options: Item[];
+    onSelect: () => void;
+}) => (
+    <Box bg="white" borderRadius="8px" p="12px" border="1px solid rgba(0,0,0,0.12)">
+        <Flex align="center" gap="12px">
+            <ItemIcon item={item} label="未选择" size={48} />
+            <Box flex="1" minW="0">
+                <Text fontWeight="bold">{title}</Text>
+                <Text fontSize="sm" opacity={0.72}>{item?.name || '未选择'}</Text>
+                <Text fontSize="xs" opacity={0.58}>可选 {options.length} 种</Text>
+            </Box>
+            <Button size="xs" variant="outline" className="yellow-btn" onClick={onSelect}>更换</Button>
         </Flex>
     </Box>
 );

@@ -8,6 +8,8 @@ import { canFacilityRunMultipleRecipes, findMatchingRecipeByInputs, findSatisfie
 import { canFacilityActAsConnectionNode, getConnectionInputs, getConnectionOutputs, getNearestInputPortIndex, getNearestOutputPortIndex, isBridgeForKind, isInputPortConnected, isLineFacilityForKind, isLogisticsFacility, isOutputPortConnected } from '../utils/facilityLogistics';
 import { checkPlacementRule, isRectInsideCore, isRectInsideExpandedBounds } from '../utils/placementRules';
 import { getConnectionCarriedItem } from '../utils/connectionContent';
+import { optimizeSelectedBlueprint, type BlueprintOptimizationStats } from '../autoPlanner/autoLayoutPlanner';
+import type { AutoPlannerSettings } from './autoPlannerSettingsStore';
 
 interface HistorySnapshot {
     machines: PlacedMachine[];
@@ -106,6 +108,7 @@ interface GameState {
     openMaterialSelector: (machineInstanceId: string, outputIndex?: number | null) => void;
     closeMaterialSelector: () => void;
     setMachineMaterial: (instanceId: string, materialId: string, outputIndex?: number | null) => void;
+    setReactorSlotItem: (instanceId: string, slotIndex: number, itemId: string) => void;
     setMachineRecipe: (instanceId: string, recipeId: string) => void;
 
     // Blueprint Actions
@@ -113,6 +116,7 @@ interface GameState {
     currentBlueprintName: string | null;
     loadGame: (machines: PlacedMachine[], connections: Connection[], gridWidth: number, gridHeight: number, blueprintId: string | null, blueprintName: string) => void;
     applyAutoPlan: (machines: PlacedMachine[], connections: Connection[], gridWidth: number, gridHeight: number) => void;
+    optimizeSelection: (settings: AutoPlannerSettings) => { ok: true; stats: BlueprintOptimizationStats } | { ok: false; error: string };
     setCurrentBlueprint: (id: string, name: string) => void;
     resetGame: () => void;
 
@@ -140,24 +144,41 @@ const pointKey = (point: Point) => `${point.x},${point.y}`;
 
 const isSamePoint = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
 
+const expandPath = (path: Point[]) => {
+    if (path.length === 0) return [];
+    const expanded: Point[] = [{ ...path[0] }];
+    for (let index = 1; index < path.length; index += 1) {
+        const from = path[index - 1];
+        const to = path[index];
+        if (from.x !== to.x && from.y !== to.y) {
+            expanded.push({ ...to });
+            continue;
+        }
+        const dx = Math.sign(to.x - from.x);
+        const dy = Math.sign(to.y - from.y);
+        const steps = Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
+        for (let step = 1; step <= steps; step += 1) {
+            expanded.push({ x: from.x + dx * step, y: from.y + dy * step });
+        }
+    }
+    return expanded;
+};
+
+const interiorPathPoints = (path: Point[]) => expandPath(path).slice(1, -1);
+
 const directionBetween = (from: Point, to: Point): 'h' | 'v' | null => {
     if (from.x !== to.x && from.y === to.y) return 'h';
     if (from.y !== to.y && from.x === to.x) return 'v';
     return null;
 };
 
-const isStraightThroughPathPoint = (path: Point[], index: number) => {
-    if (index <= 0 || index >= path.length - 1) return false;
-    const before = directionBetween(path[index - 1], path[index]);
-    const after = directionBetween(path[index], path[index + 1]);
-    return before !== null && before === after;
-};
-
 const pathDirectionAtPoint = (path: Point[], point: Point) => {
-    const index = path.findIndex(candidate => isSamePoint(candidate, point));
-    if (index <= 0 || index >= path.length - 1) return null;
-    if (!isStraightThroughPathPoint(path, index)) return null;
-    return directionBetween(path[index - 1], path[index]);
+    const expanded = expandPath(path);
+    const index = expanded.findIndex(candidate => isSamePoint(candidate, point));
+    if (index <= 0 || index >= expanded.length - 1) return null;
+    const before = directionBetween(expanded[index - 1], expanded[index]);
+    const after = directionBetween(expanded[index], expanded[index + 1]);
+    return before && before === after ? before : null;
 };
 
 const getEntrySide = (from: Point, to: Point): Side | undefined => {
@@ -188,22 +209,19 @@ const hasPathOverlap = (path: Point[], connections: Connection[], machines: Plac
     const occupied = new Map<string, Connection[]>();
     connections
         .filter(conn => (conn.kind || 'belt') === kind)
-        .forEach(conn => conn.path.slice(1, -1).forEach(p => {
+        .forEach(conn => interiorPathPoints(conn.path).forEach(p => {
             const key = pointKey(p);
             const list = occupied.get(key) || [];
             list.push(conn);
             occupied.set(key, list);
         }));
 
-    return path.some((point, index) => {
+    return interiorPathPoints(path).some(point => {
         const overlappingConnections = occupied.get(pointKey(point));
         if (!overlappingConnections) return false;
-        if (index === 0 || index === path.length - 1) return false;
         if (isLogisticsPointForKind(point, machines, kind) && !isPointOnBridge(point, machines, kind)) return true;
 
-        const currentDirection = isStraightThroughPathPoint(path, index)
-            ? directionBetween(path[index - 1], path[index])
-            : null;
+        const currentDirection = pathDirectionAtPoint(path, point);
         if (!currentDirection) return true;
 
         for (const connection of overlappingConnections) {
@@ -217,11 +235,10 @@ const hasPathOverlap = (path: Point[], connections: Connection[], machines: Plac
 };
 
 const hasIllegalLogisticsTraversal = (path: Point[], machines: PlacedMachine[], kind: ConnectionKind) =>
-    path.some((point, index) => {
-        if (index === 0 || index === path.length - 1) return false;
+    interiorPathPoints(path).some(point => {
         const machine = machines.find(candidate => candidate.x === point.x && candidate.y === point.y);
         if (!machine || !canFacilityActAsConnectionNode(machine.machineId, kind)) return false;
-        if (isBridgeForKind(machine.machineId, kind)) return !isStraightThroughPathPoint(path, index);
+        if (isBridgeForKind(machine.machineId, kind)) return !pathDirectionAtPoint(path, point);
         return true;
     });
 
@@ -230,8 +247,7 @@ const isPathClearOfFacilityFootprints = (
     machines: PlacedMachine[],
     sourceMachineId: string,
     targetMachineId?: string
-) => path.every((point, index) => {
-    if (index === 0 || index === path.length - 1) return true;
+) => interiorPathPoints(path).every(point => {
     return !machines.some(machine => {
         if (machine.id === sourceMachineId || machine.id === targetMachineId) return false;
         const config = FACILITIES.find(candidate => candidate.id === machine.machineId);
@@ -1161,6 +1177,21 @@ export const useGameStore = create<GameState>((set, get) => ({
             };
         });
     },
+    setReactorSlotItem: (instanceId, slotIndex, itemId) => {
+        get().takeSnapshot();
+        set(state => ({
+            machines: state.machines.map(machine => {
+                if (machine.id !== instanceId) return machine;
+                const slots = [...(machine.reactorSlotItemIds || [])];
+                if (itemId) {
+                    slots[slotIndex] = itemId;
+                } else {
+                    slots[slotIndex] = '';
+                }
+                return { ...machine, reactorSlotItemIds: slots };
+            }),
+        }));
+    },
     setMachineRecipe: (instanceId, recipeId) => {
         const recipe = getRecipesForFacility(get().machines.find(machine => machine.id === instanceId)?.machineId || '')
             .find(candidate => candidate.id === recipeId);
@@ -1526,6 +1557,31 @@ export const useGameStore = create<GameState>((set, get) => ({
             connectionDetailId: null,
             uiView: 'editor',
         });
+    },
+
+    optimizeSelection: (settings) => {
+        const { machines, connections, selectedMachineIds, selectedConnectionIds, gridWidth, gridHeight } = get();
+        const optimized = optimizeSelectedBlueprint(
+            machines,
+            connections,
+            selectedMachineIds,
+            selectedConnectionIds,
+            gridWidth,
+            gridHeight,
+            settings
+        );
+        if (!optimized.ok) return optimized;
+
+        get().takeSnapshot();
+        set({
+            machines: deriveAutoRecipeProducts(optimized.result.machines, optimized.result.connections),
+            connections: optimized.result.connections,
+            selectedMachineIds: optimized.result.selectedMachineIds,
+            selectedConnectionIds: optimized.result.selectedConnectionIds,
+            connectionDetailId: null,
+            mode: GameMode.BOX_SELECT,
+        });
+        return { ok: true, stats: optimized.result.stats };
     },
 
     setCurrentBlueprint: (id, name) => set({ currentBlueprintId: id, currentBlueprintName: name }),

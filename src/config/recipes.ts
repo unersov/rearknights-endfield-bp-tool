@@ -2496,7 +2496,7 @@ export const RECIPES: Recipe[] = [
   },
   {
     "id": "reactor-crucible_recipe_103_1",
-    "name": "反应池：2赫铜溶液、蓝铁粉末 → 赤铜块、污水",
+    "name": "反应池：2赫铜溶液、蓝铁粉末 → 赫铜块、污水",
     "machineId": "reactor-crucible",
     "durationSeconds": 2,
     "inputs": [
@@ -2513,8 +2513,8 @@ export const RECIPES: Recipe[] = [
     ],
     "outputs": [
       {
-        "materialId": "cuprium",
-        "name": "赤铜块",
+        "materialId": "hetonite",
+        "name": "赫铜块",
         "amount": 1
       },
       {
@@ -2543,8 +2543,8 @@ export const RECIPES: Recipe[] = [
     ],
     "outputs": [
       {
-        "materialId": "cuprium",
-        "name": "赤铜块",
+        "materialId": "hetonite",
+        "name": "赫铜块",
         "amount": 1
       },
       {
